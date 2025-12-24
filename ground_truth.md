@@ -1,0 +1,19 @@
+## Evidence Notes
+- The World Health Organization (WHO) in its 2023 report states that comprehensive tobacco control measures have been effective in reducing smoking prevalence among adults and youth, but significant challenges remain globally, especially in low- and middle-income countries (WHO, 2023) [source](https://www.who.int/publications/i/item/9789240077164).
+- Smoking cessation programs, when properly funded and implemented, lead to higher quit rates. Evidence suggests that increases in funding for tobacco control correlate with declines in smoking rates (CDC, 2023) [source](https://www.cdc.gov/reach/php/strategies/tobacco-prevention-control.html).
+- The 2023 report highlights that smoke-free policies reduce secondhand smoke exposure and are linked to improvements in public health outcomes (WHO, 2023) [source](https://www.who.int/publications/i/item/9789240077164).
+- Despite progress, disparities in tobacco use exist based on socio-economic status, region, and access to cessation services, indicating a need for tailored approaches in tobacco control policies (NASEM, 2022).
+- The use of e-cigarettes and vaping products has introduced new challenges, with ongoing debates about their effectiveness as cessation tools versus their potential to initiate use among youth (FDA, 2023) [source](https://www.fda.gov/tobacco-products/public-health-issues/using-tobacco-products-using-flavored-cigarettes).
+- No single approach is universally effective; a multipronged strategy involving legislation, education, and healthcare provider involvement is recognized as necessary for successful tobacco control (WHO, 2023).
+- Evidence indicates that legislation mandating plain packaging and graphic health warnings on tobacco products has been effective in increasing quit intentions and reducing usage (Cochrane Review, 2021).
+- The effectiveness of taxation on tobacco products as a deterrent is well-supported; higher prices generally lead to lower consumption rates, particularly among youth (CDC, 2019).
+  
+## Baseline Answer
+Tobacco control remains a critical public health priority, with an extensive body of evidence supporting various strategies. Comprehensive tobacco control measures, including smoking cessation programs, smoke-free policies, and high taxes on tobacco products, have shown significant efficacy in reducing smoking rates globally. Evidence indicates that funding for tobacco control positively correlates with declines in both youth and adult smoking prevalence. However, challenges remain, especially in low-income regions, where access to cessation services and public awareness can be limited. Further complexities arise with the rise of e-cigarettes, where their role in tobacco control is continually debated. Given these dynamics, effective tobacco control requires a multipronged approach adapted to local contexts. 
+
+## Key Uncertainties
+- The long-term health impacts of e-cigarettes and vaping products are still under investigation, creating uncertainty about their role in tobacco cessation.
+- Differences in cultural attitudes towards smoking can affect the efficacy of standard tobacco control measures, limiting their applicability.
+- Ongoing disparities in tobacco use related to socio-economic factors and access to healthcare may impede universal success in smoking reduction.
+- The potential effects of emerging tobacco products (such as heated tobacco products) on public health are not fully understood, complicating regulatory approaches.
+- Variation in enforcement of tobacco control policies across countries and regions may influence overall effectiveness, highlighting the need for sustained commitment.

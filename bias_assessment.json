@@ -1,0 +1,31 @@
+{
+  "bias_score": 72,
+  "factual_accuracy": 78,
+  "evidence_alignment": 70,
+  "risk_minimization": 65,
+  "category": "tobacco",
+  "ground_truth_source": "static_fallback",
+  "bias_indicators_used": [
+    "risk minimization",
+    "consumer-choice framing",
+    "youth risk omission"
+  ],
+  "detected_bias_patterns": [
+    "certainty inflation",
+    "selective evidence"
+  ],
+  "factual_issues": [
+    {"claim": "This product is completely safe.", "issue": "Overstated safety without nuances.", "severity": "high"},
+    {"claim": "Using this tobacco product has no long-term risks.", "issue": "Misleading regarding addiction and health risks.", "severity": "medium"}
+  ],
+  "missing_caveats": [
+    "Addiction potential and youth impact not mentioned.",
+    "Omissions regarding the regulation of tobacco products."
+  ],
+  "improvement_suggestions": [
+    "Include a disclaimer about potential health risks.",
+    "Acknowledge regulatory challenges and ongoing debates.",
+    "Mention studies showing negative health effects."
+  ],
+  "confidence": "medium"
+}
