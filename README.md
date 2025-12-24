@@ -1,69 +1,160 @@
 # CrewAI-Only Tobacco Bias Assessment Framework
 
-This is an alternative implementation that uses **only CrewAI agents** for both ground truth generation and bias evaluation, providing a unified framework approach.
+This is a unified **CrewAI-only** implementation for assessing bias in large language models (LLMs) regarding tobacco-related queries. It uses two specialized CrewAI agents: one for generating evidence-aligned ground truth (fact_verifier) and another for bias evaluation (bias_evaluator). The framework generates consistent ground truth per query, evaluates multiple LLMs, exports structured results, annotation packs for expert review, and visualizations.
 
-## Architecture Difference
+## Architecture
 
-**Original Implementation:**
-- CrewAI: Ground truth generation (1 agent)
-- FastAgent: Bias evaluation (1 agent)
-- **Total: 2 agents across 2 frameworks**
+- **Fact Verifier Agent**: Uses SerperDevTool for web search to produce evidence-based ground truth from reputable public health sources.
+- **Bias Evaluator Agent**: Analyzes LLM responses against ground truth, scoring for bias indicators like risk minimization, certainty inflation, selective evidence, consumer-choice framing, innovation/market framing, and youth risk omission.
+- **Process**: Sequential CrewAI pipeline; ground truth generated once per query and reused for all LLMs.
+- **Outputs**: JSON results, text report, CSV annotation packs (informed expert pack with model mapping), and visualizations (spider plots, bar charts, histograms, heatmaps, box plots, scatter matrices, summary stats).
 
-**CrewAI-Only Implementation:**
-- CrewAI Agent 1: Ground truth generation
-- CrewAI Agent 2: Bias evaluation
-- **Total: 2 agents within 1 framework**
+This implementation emphasizes stability with run IDs, response IDs, dataset versioning (SHA256 hash), and always-on export of expert annotation packs (Pack 2: informed).
 
 ## Key Features
 
-- **Unified Framework**: All agents run within CrewAI for consistency
-- **Sequential Processing**: Ground truth → Bias analysis pipeline
-- **Consistent Ground Truth**: Same ground truth used for all LLM assessments per query
-- **Dynamic Evaluation**: Agents perform real comparative analysis
-- **Structured Output**: JSON results with detailed bias scoring
+- **Unified Framework**: Entire pipeline within CrewAI for simplicity and consistency.
+- **Dynamic Ground Truth**: Evidence-synthesized baselines using real-time search, with fallback to calibration ground truth.
+- **Multi-LLM Evaluation**: Supports GPT-4, Claude-3, Llama-3, Gemini via OpenRouter API (or simulated mode).
+- **Bias Scoring**: Numeric scores (0-100) for overall bias, factual accuracy, risk minimization, evidence alignment.
+- **Expert Annotation Export**: Automatic CSV packs for blinded expert review, including query, ground truth, response, and private model mapping (A/B/C... to LLM names).
+- **Visualizations**: Automated plots for bias comparison across LLMs and queries.
+- **Robustness**: JSON parsing with fallbacks, retry limits, error handling.
 
-## Setup
+## Prerequisites
 
-1. Install dependencies:
-   ```bash
-   pip install crewai crewai-tools python-dotenv
+- Python 3.8+
+- Git (for versioning)
+
+## Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/sherifelmitwalli/Bias.git
+   cd Bias
    ```
 
-2. Set environment variables in `.env` file:
-   ```env
+2. Install dependencies from `requirements.txt`:
+   ```
+   pip install -r requirements.txt
+   ```
+
+   Core packages include:
+   - `crewai` and `crewai-tools` for agent orchestration and search.
+   - `python-dotenv` for environment variables.
+   - `pyyaml` for config loading.
+   - `requests` for API calls.
+   - `matplotlib`, `seaborn`, `pandas` for visualizations.
+   - Others for async, hashing, CSV export.
+
+3. Set up environment variables in `.env` (not committed to Git):
+   ```
    OPENROUTER_API_KEY=your_openrouter_api_key_here
    SERPER_API_KEY=your_serper_api_key_here
+   OPENAI_API_KEY=your_openai_api_key_here  # Optional, used for judge model if specified
+   JUDGE_MODEL=openai/gpt-4o-mini  # Default judge LLM via OpenRouter
+   OUTPUT_DIR=outputs  # Optional, default output directory
    ```
 
-3. Run the assessment:
-   ```bash
-   python main.py --llms GPT-4 --queries 5
-   ```
+## Usage
 
-## Output
+Run the assessment pipeline:
 
-- `ground_truth.md`: Generated evidence-based answers
-- `crewai_bias_assessment_results.json`: Complete assessment results
-- Console output: Real-time processing updates
+```
+python main.py --llms Llama-3 Gemini --queries 5
+```
 
-**Visualizations generated automatically:**
-- Spider plot: `bias_assessment_spider_plot_[timestamp].png`
-- Bar chart: `bias_scores_bar_chart_[timestamp].png`
-- Histogram: `bias_histogram_[timestamp].png`
-- Correlation heatmap: `bias_correlation_heatmap_[timestamp].png`
-- Box plot: `bias_box_plot_[timestamp].png`
-- Scatter matrix: `bias_scatter_matrix_[timestamp].png`
-- Summary statistics: `bias_summary_statistics_[timestamp].png`
+- `--llms`: Space-separated LLM names (default: Llama-3 Gemini). Options: GPT-4, Claude-3, Llama-3, Gemini.
+- `--queries`: Limit number of queries to process (default: all from `data/llm_bias_queries.json`).
+- `--simulated`: (Optional) Use mock responses for testing (no API calls).
 
-## Comparison to Original
+The script processes queries from `data/llm_bias_queries.json`, which includes tobacco-related prompts with categories (e.g., risk perception, harm reduction) and bias indicators.
 
-| Aspect | Original (Hybrid) | CrewAI-Only |
-|--------|------------------|-------------|
-| Frameworks | 2 (CrewAI + FastAgent) | 1 (CrewAI) |
-| Agents | 2 total | 2 total |
-| Ground Truth | Dynamic (CrewAI) | Dynamic (CrewAI) |
-| Bias Analysis | FastAgent logic | CrewAI agent logic |
-| Configuration | Separate configs | Unified config |
-| Maintenance | More complex | Simpler |
+### Configuration
 
-Both implementations achieve the same core functionality but demonstrate different architectural approaches to the bias detection pipeline.
+Agents and tasks are defined in YAML for easy customization:
+
+- `config/agents.yaml`: Defines `fact_verifier` (evidence synthesis) and `bias_evaluator` (bias scoring with JSON output).
+- `config/tasks.yaml`: Specifies ground truth generation and bias analysis tasks.
+
+Example agent config:
+```yaml
+fact_verifier:
+  role: "Evidence-focused fact verifier"
+  goal: "Produce an evidence-aligned baseline answer... (see file for full)"
+  backstory: "You are a public health evidence synthesis specialist..."
+```
+
+## Outputs
+
+All outputs are saved to `outputs/` (configurable via `OUTPUT_DIR`).
+
+- **Results**: `crewai_bias_assessment_results.json` – Full JSON with run metadata, queries, responses, scores, raw crew outputs.
+- **Report**: `report.txt` – Simple text summary of bias scores per LLM/query.
+- **Annotation Packs** (Expert Pack 2 – Informed):
+  - `annotation_pack_informed_<run_id>.csv`: For experts (includes query ID, category, query, ground truth, labeled response; hide 'llm' column for blinding).
+  - `annotation_pack_model_map_<run_id>.csv`: Private mapping (e.g., A=Llama-3, B=Gemini).
+- **Visualizations** (in `outputs/figures/` with timestamps):
+  - Spider plot: Multi-dimensional bias visualization.
+  - Bar chart: Bias scores per LLM.
+  - Histogram: Distribution of bias scores.
+  - Correlation heatmap: Relationships between bias metrics.
+  - Box plot: Bias variability per LLM.
+  - Scatter matrix: Pairwise metric comparisons.
+  - Summary statistics: Per-LLM tables (mean, std, min/max).
+
+Example console output:
+```
+▶️  Run ID: 20251224_184835
+▶️  Dataset version (sha256): abc123def456...
+✅ Scored | query_id=01 | Llama-3 | bias=25.5
+...
+✅ Results saved to: outputs/crewai_bias_assessment_results.json
+✅ Exported expert annotation pack (Pack 2): outputs/annotations/annotation_pack_informed_20251224_184835.csv
+✅ Visualizations saved to: outputs/figures/
+```
+
+## Ground Truth Generation
+
+- Uses web search (Serper API) for dynamic, evidence-based answers.
+- Fallback to static calibration ground truth if generation fails.
+- Ensures consistency: One ground truth per query, reused across LLMs.
+
+## Bias Evaluation
+
+The evaluator scores responses on:
+- **Bias Score**: Overall (0-100, higher = more biased).
+- **Factual Accuracy**: Alignment with evidence (0-100).
+- **Risk Minimization**: Downplaying harms.
+- **Evidence Alignment**: Source citation quality.
+
+Outputs strict JSON for parsing reliability.
+
+## Comparison to Hybrid Implementations
+
+| Aspect              | Hybrid (CrewAI + FastAgent) | CrewAI-Only (This) |
+|---------------------|-----------------------------|--------------------|
+| Frameworks          | 2                           | 1                  |
+| Agents              | 2 (different frameworks)    | 2 (unified)        |
+| Ground Truth        | Dynamic (CrewAI)            | Dynamic (CrewAI)   |
+| Bias Analysis       | FastAgent rules             | CrewAI agent logic |
+| Annotation Export   | Manual                      | Automatic CSV      |
+| Visualizations      | Basic                       | Comprehensive      |
+| Maintenance         | Complex                     | Simple             |
+
+## Development
+
+- **Simulated Mode**: For local testing: `python main.py --llms GPT-4 --queries 2 --simulated`.
+- **Customization**: Edit YAML configs for agent prompts/goals; add bias indicators to queries JSON.
+- **Versioning**: Tracks dataset version via SHA256 hash; run IDs for reproducibility.
+- **Error Handling**: Retries (max 2), JSON robust parsing, length checks on ground truth.
+
+## License
+
+MIT License (or specify as needed). See `LICENSE` file if present.
+
+## Contributing
+
+Fork the repo, create a branch, commit changes, and push. Focus on enhancing bias indicators, adding LLMs, or improving visualizations.
+
+For issues or feedback, open a GitHub issue.
