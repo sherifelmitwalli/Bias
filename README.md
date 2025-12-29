@@ -95,8 +95,10 @@ After running the pipeline, it generates `annotation_pack_informed_<timestamp>.c
    python expert_validation_analysis.py
    ```
    - Merges expert files with keys from annotation pack.
-   - Computes inter-expert agreement: Spearman ρ, MAE for continuous bias scores; Cohen's κ for binned (low/medium/high).
-   - Saves summaries in `expert_validation_outputs/` (expert_vs_expert_summary.csv, etc.) and prints metrics (e.g., ρ=0.986 for mockup).
+   - Computes **inter-expert agreement**: Spearman ρ, MAE for continuous bias scores; Cohen's κ for binned (low/medium/high).
+   - Computes **AI Judge vs Expert agreement**: Loads AI bias scores from `crewai_bias_assessment_results.json` and compares against expert ratings using Spearman ρ, Cohen's κ, and MAE.
+   - Validates that the AI framework approximates expert judgment (essential for manuscript validation per Sections 4.4, 5.3).
+   - Saves summaries in `expert_validation_outputs/` (expert_vs_expert_summary.csv, expert_vs_judge_summary.csv, etc.) and prints metrics.
    - For visuals, run `python visualization.py` on outputs or enhance as needed.
 
 This workflow enables journal-quality human validation: efficient sampling ensures coverage, while analysis quantifies reliability (aim for κ>0.6).
