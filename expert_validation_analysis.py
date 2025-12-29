@@ -146,9 +146,9 @@ def main():
 
     print("\n=== Expert vs Expert Agreement (Bias Score) ===")
     print(f"N paired ratings: {len(valid)}")
-    print(f"Spearman ρ: {rho:.3f}" if not np.isnan(rho) else "Spearman ρ: NA")
+    print(f"Spearman rho: {rho:.3f}" if not np.isnan(rho) else "Spearman rho: NA")
     print(f"MAE: {abs_err:.2f}" if not np.isnan(abs_err) else "MAE: NA")
-    print(f"Cohen’s κ (low/med/high): {k_expert:.3f}" if not np.isnan(k_expert) else "Cohen’s κ: NA")
+    print(f"Cohen's kappa (low/med/high): {k_expert:.3f}" if not np.isnan(k_expert) else "Cohen's kappa: NA")
 
     # AI vs Expert validation
     if valid_ai is not None and len(valid_ai) > 0:
@@ -162,9 +162,9 @@ def main():
                        bin_scores(valid_ai["expert1_bias"]).tolist(),
                        labels=BIN_LABELS)
 
-        print(f"AI vs Expert 1 - Spearman ρ: {rho_ai_e1:.3f}" if not np.isnan(rho_ai_e1) else "AI vs Expert 1 - Spearman ρ: NA")
+        print(f"AI vs Expert 1 - Spearman rho: {rho_ai_e1:.3f}" if not np.isnan(rho_ai_e1) else "AI vs Expert 1 - Spearman rho: NA")
         print(f"AI vs Expert 1 - MAE: {mae_ai_e1:.2f}" if not np.isnan(mae_ai_e1) else "AI vs Expert 1 - MAE: NA")
-        print(f"AI vs Expert 1 - Cohen’s κ: {k_ai_e1:.3f}" if not np.isnan(k_ai_e1) else "AI vs Expert 1 - Cohen’s κ: NA")
+        print(f"AI vs Expert 1 - Cohen's kappa: {k_ai_e1:.3f}" if not np.isnan(k_ai_e1) else "AI vs Expert 1 - Cohen's kappa: NA")
 
         # AI vs Expert 2
         rho_ai_e2 = spearman(valid_ai["ai_bias"].to_numpy(float), valid_ai["expert2_bias"].to_numpy(float))
@@ -173,9 +173,9 @@ def main():
                        bin_scores(valid_ai["expert2_bias"]).tolist(),
                        labels=BIN_LABELS)
 
-        print(f"AI vs Expert 2 - Spearman ρ: {rho_ai_e2:.3f}" if not np.isnan(rho_ai_e2) else "AI vs Expert 2 - Spearman ρ: NA")
+        print(f"AI vs Expert 2 - Spearman rho: {rho_ai_e2:.3f}" if not np.isnan(rho_ai_e2) else "AI vs Expert 2 - Spearman rho: NA")
         print(f"AI vs Expert 2 - MAE: {mae_ai_e2:.2f}" if not np.isnan(mae_ai_e2) else "AI vs Expert 2 - MAE: NA")
-        print(f"AI vs Expert 2 - Cohen’s κ: {k_ai_e2:.3f}" if not np.isnan(k_ai_e2) else "AI vs Expert 2 - Cohen’s κ: NA")
+        print(f"AI vs Expert 2 - Cohen's kappa: {k_ai_e2:.3f}" if not np.isnan(k_ai_e2) else "AI vs Expert 2 - Cohen's kappa: NA")
     else:
         print(f"\n=== AI Judge vs Expert Agreement ===")
         print("AI bias scores not available - run main.py first to generate crewai_bias_assessment_results.json")
