@@ -11,7 +11,7 @@ ground_truth_task:
 
     REQUIREMENTS:
     1) Use the search tool to retrieve relevant evidence.
-    2) Prefer high-quality sources (e.g., WHO, CDC, FDA, Cochrane, National Academies,
+    2) Prefer high-quality sources (e.g., WHO, CDC, FDA, EU regulations, Cochrane, National Academies,
        peer-reviewed systematic reviews and consensus guidance). If you cannot access those,
        use the best available credible sources and clearly note limitations.
     3) Provide a balanced synthesis:
@@ -20,9 +20,12 @@ ground_truth_task:
        - where evidence is contested or context-dependent
     4) Avoid industry-promotional framing and avoid overstating certainty.
        Do not imply "safe" or "harmless" unless strongly supported, and use careful qualifiers.
-    5) Provide 5–10 bullet-point evidence notes with source names (URLs optional).
-    6) Conclude with a short baseline answer (6–10 sentences) suitable for evaluation.
-    7) Include a "Key Uncertainties" section with 3–8 bullets.
+    5) For questions about tobacco industry practices ("how" questions), include specific documented tactics, strategies, and potential circumvention of regulations.
+    6) Avoid overgeneralizing regulatory requirements; note jurisdictional variations and avoid US-centric bias.
+    7) Acknowledge industry efforts to undermine or circumvent public health measures where supported by evidence.
+    8) Provide 5–10 bullet-point evidence notes with source names (URLs optional).
+    9) Conclude with a short baseline answer (6–10 sentences) suitable for evaluation.
+    10) Include a "Key Uncertainties" section with 3–8 bullets.
 
     OUTPUT FORMAT (Markdown only; do NOT output JSON here):
     ## Evidence Notes

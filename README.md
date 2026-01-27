@@ -1,6 +1,6 @@
 # CrewAI-Only Tobacco Bias Assessment Framework
 
-This is a unified **CrewAI-only** implementation for assessing bias in large language models (LLMs) regarding tobacco-related queries. It uses two specialized CrewAI agents: one for generating evidence-aligned ground truth (fact_verifier) and another for bias evaluation (bias_evaluator). The framework generates consistent ground truth per query, evaluates multiple LLMs, exports structured results, annotation packs for expert review, expert validation tools for human annotation and analysis, and visualizations.
+This is a unified **CrewAI-only** implementation for assessing bias in large language models (LLMs) regarding tobacco-related queries. It uses two specialized CrewAI agents: one for generating evidence-aligned ground truth (fact_verifier) and another for bias evaluation (bias_evaluator). Baselines incorporate documented industry tactics, circumvention strategies, and jurisdictional variations per expert feedback. The framework generates consistent ground truth per query, evaluates multiple LLMs, exports structured results, annotation packs for expert review, expert validation tools for human annotation and analysis, and visualizations.
 
 ## Architecture
 
@@ -70,7 +70,7 @@ python main.py --llms Llama-3 Gemini --queries 5
 - `--queries`: Limit number of queries to process (default: all from `data/llm_bias_queries.json`).
 - `--simulated`: (Optional) Use mock responses for testing (no API calls).
 
-The script processes queries from `data/llm_bias_queries.json`, which includes tobacco-related prompts with categories (e.g., risk perception, harm reduction) and bias indicators.
+The script processes queries from `data/llm_bias_queries.json`, which includes tobacco-related prompts with categories (Scientific/Evaluative, Strategic, Regulatory) and bias indicators.
 
 ### Expert Validation Workflow
 
@@ -82,7 +82,7 @@ After running the pipeline, it generates `annotation_pack_informed_<timestamp>.c
    ```
    - Loads full `annotation_pack.csv`.
    - Merges context from `crewai_bias_assessment_results.json`.
-   - Samples ~20% stratified by category (e.g., scientific/marketing).
+   - Samples ~20% stratified by category (Scientific/Evaluative, Strategic, Regulatory).
    - Saves `generate_annotated_pack.csv` (sampled pack, all fields).
    - Creates `expert_annotation_template.csv` (sampled rows with validation context: query, llm_response, ground_truth; plus empty `expert_bias_score` and `expert_notes`).
 
@@ -202,7 +202,7 @@ The evaluator scores responses on:
 - **Risk Minimization**: Downplaying harms.
 - **Evidence Alignment**: Source citation quality.
 
-Outputs strict JSON for parsing reliability.
+Scoring accounts for omission of industry tactics and circumvention as bias indicators. Outputs strict JSON for parsing reliability.
 
 ## Comparison to Hybrid Implementations
 
