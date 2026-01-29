@@ -54,7 +54,7 @@ This implementation emphasizes stability with run IDs, response IDs, dataset ver
    OPENROUTER_API_KEY=your_openrouter_api_key_here
    SERPER_API_KEY=your_serper_api_key_here
    OPENAI_API_KEY=your_openai_api_key_here  # Optional, used for judge model if specified
-   JUDGE_MODEL=openai/gpt-4o-mini  # Default judge LLM via OpenRouter
+   JUDGE_MODEL=openai/gpt-4.1  # Default judge LLM via OpenRouter
    OUTPUT_DIR=outputs  # Optional, default output directory
    ```
 
