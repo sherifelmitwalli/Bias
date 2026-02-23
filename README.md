@@ -6,7 +6,7 @@ This is a unified **CrewAI-only** implementation for assessing bias in large lan
 
 - **Fact Verifier Agent**: Uses SerperDevTool for web search to produce evidence-based ground truth from reputable public health sources.
 - **Bias Evaluator Agent**: Analyzes LLM responses against ground truth, scoring for bias indicators like risk minimization, certainty inflation, selective evidence, consumer-choice framing, innovation/market framing, and youth risk omission.
-- **Process**: Sequential CrewAI pipeline; ground truth generated once per query and reused for all LLMs.
+- **Process**: Sequential CrewAI pipeline; ground truth generated once per query and reused for all LLMs, with cached baselines for reproducibility.
 - **Outputs**: JSON results, text report, CSV annotation packs (informed expert pack with model mapping), sampled annotated pack for efficiency, expert annotation templates, validation analysis, and visualizations (spider plots, bar charts, histograms, heatmaps, box plots, scatter matrices, summary stats).
 
 This implementation emphasizes stability with run IDs, response IDs, dataset versioning (SHA256 hash), and always-on export of expert annotation packs (Pack 2: informed), plus tools for stratified sampling and validation.
@@ -14,12 +14,12 @@ This implementation emphasizes stability with run IDs, response IDs, dataset ver
 ## Key Features
 
 - **Unified Framework**: Entire pipeline within CrewAI for simplicity and consistency.
-- **Dynamic Ground Truth**: Evidence-synthesized baselines using real-time search, with fallback to calibration ground truth.
-- **Multi-LLM Evaluation**: Supports GPT-4, Claude-3, Llama-3, Gemini via OpenRouter API (or simulated mode).
+- **Dynamic Ground Truth**: Evidence-synthesized baselines using real-time search, with fallback to calibration ground truth, and cached baselines for reproducibility.
+- **Multi-LLM Evaluation**: Default evaluation targets Llama-3 and Gemini via OpenRouter API (or simulated mode), with optional support for additional models.
 - **Bias Scoring**: Numeric scores (0-100) for overall bias, factual accuracy, risk minimization, evidence alignment.
 - **Expert Annotation Export**: Automatic CSV packs for blinded expert review, including query, ground truth, response, and private model mapping (A/B/C... to LLM names).
 - **Stratified Sampling for Expert Review**: make_expert_template.py samples ~20% stratified by category/LLM to optimize expert time.
-- **Expert Validation Tools**: Templates for bias scoring and analysis for inter-expert agreement (Spearman ρ, MAE, Cohen's κ).
+- **Expert Validation Tools**: Templates for bias scoring and analysis for inter-expert agreement (ICC, bootstrapped Spearman/MAE, weighted κ).
 - **Visualizations**: Automated plots for bias comparison across LLMs and queries.
 - **Robustness**: JSON parsing with fallbacks, retry limits, error handling.
 
@@ -46,7 +46,8 @@ This implementation emphasizes stability with run IDs, response IDs, dataset ver
    - `python-dotenv` for environment variables.
    - `pyyaml` for config loading.
    - `requests` for API calls.
-   - `matplotlib`, `seaborn`, `pandas` for visualizations.
+   - `matplotlib`, `pandas` for visualizations.
+   - `scipy`, `scikit-learn`, `pingouin` for statistical analysis.
    - Others for async, hashing, CSV export.
 
 3. Set up environment variables in `.env` (not committed to Git):
@@ -54,7 +55,7 @@ This implementation emphasizes stability with run IDs, response IDs, dataset ver
    OPENROUTER_API_KEY=your_openrouter_api_key_here
    SERPER_API_KEY=your_serper_api_key_here
    OPENAI_API_KEY=your_openai_api_key_here  # Optional, used for judge model if specified
-   JUDGE_MODEL=openai/gpt-4.1  # Default judge LLM via OpenRouter
+   JUDGE_MODEL=openai/gpt-5.2  # Default judge LLM via OpenRouter
    OUTPUT_DIR=outputs  # Optional, default output directory
    ```
 
@@ -66,11 +67,11 @@ Run the assessment pipeline:
 python main.py --llms Llama-3 Gemini --queries 5
 ```
 
-- `--llms`: Space-separated LLM names (default: Llama-3 Gemini). Options: GPT-4, Claude-3, Llama-3, Gemini.
-- `--queries`: Limit number of queries to process (default: all from `data/llm_bias_queries.json`).
+- `--llms`: Space-separated LLM names (default: Llama-3 Gemini). Options include GPT-4, Claude-3, Llama-3, Gemini.
+- `--queries`: Limit number of queries to process (default: stratified 50-query subset from `data/llm_bias_queries.json`).
 - `--simulated`: (Optional) Use mock responses for testing (no API calls).
 
-The script processes queries from `data/llm_bias_queries.json`, which includes tobacco-related prompts with categories (Scientific/Evaluative, Strategic, Regulatory) and bias indicators.
+The script processes queries from `data/llm_bias_queries.json`, which includes tobacco-related prompts with categories (Scientific/Evaluative, Strategic, Regulatory) and bias indicators. A stratified 50-query subset is selected by default to align with the manuscript.
 
 ### Expert Validation Workflow
 
@@ -84,24 +85,24 @@ After running the pipeline, it generates `annotation_pack_informed_<timestamp>.c
    - Merges context from `crewai_bias_assessment_results.json`.
    - Samples ~20% stratified by category (Scientific/Evaluative, Strategic, Regulatory).
    - Saves `generate_annotated_pack.csv` (sampled pack, all fields).
-   - Creates `expert_annotation_template.csv` (sampled rows with validation context: query, llm_response, ground_truth; plus empty `expert_bias_score` and `expert_notes`).
+   - Creates `expert_annotation_template.xlsx` (blinded workbook with rubric, metadata fields, and per-dimension scoring).
 
 2. **Expert Annotation**:
-   - Distribute `expert_annotation_template.csv` to experts.
-   - Experts fill `expert_bias_score` (0-100) and notes, save as `expert_1_annotations.csv` and `expert_2_annotations.csv` (retain all columns, especially keys: run_id, query_id, etc.).
+   - Distribute `expert_annotation_template.xlsx` to experts.
+   - Experts fill per-dimension scores and overall bias, plus metadata/flags, then save as `expert_1_annotations.csv` and `expert_2_annotations.csv` (export to CSV while retaining columns and keys).
 
 3. **Validation Analysis**:
    ```
    python expert_validation_analysis.py
    ```
    - Merges expert files with keys from annotation pack.
-   - Computes **inter-expert agreement**: Spearman ρ, MAE for continuous bias scores; Cohen's κ for binned (low/medium/high).
-   - Computes **AI Judge vs Expert agreement**: Loads AI bias scores from `crewai_bias_assessment_results.json` and compares against expert ratings using Spearman ρ, Cohen's κ, and MAE.
+   - Computes **inter-expert agreement**: ICC(2,1) with 95% CI, bootstrapped Spearman ρ/MAE, weighted κ.
+   - Computes **AI Judge vs Expert agreement**: ICC(2,1), bootstrapped Spearman ρ/MAE.
    - Validates that the AI framework approximates expert judgment (essential for manuscript validation per Sections 4.4, 5.3).
-   - Saves summaries in `expert_validation_outputs/` (expert_vs_expert_summary.csv, expert_vs_judge_summary.csv, etc.) and prints metrics.
+   - Saves summaries in `expert_validation_outputs/` (validation_summary.json and optional per_dimension_agreement.csv) and prints metrics.
    - For visuals, run `python visualization.py` on outputs or enhance as needed.
 
-This workflow enables journal-quality human validation: efficient sampling ensures coverage, while analysis quantifies reliability (aim for κ>0.6).
+This workflow enables journal-quality human validation: efficient sampling ensures coverage, while analysis quantifies reliability (ICC/Spearman/MAE with CIs).
 
 #### Expert Annotation Guidelines
 
@@ -155,16 +156,20 @@ All outputs are saved to `outputs/` (configurable via `OUTPUT_DIR`).
   - `annotation_pack_model_map_<run_id>.csv`: Private mapping (e.g., A=Llama-3, B=Gemini).
 - **Validation Outputs**:
   - `generate_annotated_pack.csv`: Sampled 20% for experts (all fields).
-  - `expert_annotation_template.csv`: Template with context and bias score column.
-  - `expert_validation_outputs/`: Agreement summaries (CSVs), console metrics.
+  - `expert_annotation_template.xlsx`: Template with rubric, metadata, and scoring columns.
+  - `expert_validation_outputs/`: Agreement summaries (validation_summary.json, per_dimension_agreement.csv), console metrics.
+- **Statistical Analysis Outputs**:
+  - `outputs/statistical_analysis/`: Between-model comparisons, category summaries, correlation matrix.
 - **Visualizations** (in `outputs/figures/` with timestamps):
-  - Spider plot: Multi-dimensional bias visualization.
-  - Bar chart: Bias scores per LLM.
-  - Histogram: Distribution of bias scores.
-  - Correlation heatmap: Relationships between bias metrics.
-  - Box plot: Bias variability per LLM.
-  - Scatter matrix: Pairwise metric comparisons.
-  - Summary statistics: Per-LLM tables (mean, std, min/max).
+  - Figure 3: `figure3_bias_distribution_*.png` (distribution by model).
+  - Figure 4: `figure4_correlation_matrix_*.png` (metric correlation matrix).
+  - Figure 5: `bias_assessment_spider_plot_*.png` (radar plot by model).
+  - Bar chart: `bias_scores_bar_chart_*.png`.
+  - Box plot: `bias_box_plot_*.png`.
+  - Scatter matrix: `bias_scatter_matrix_*.png`.
+  - Table 1 preview image: `table1_summary_statistics_*.png`.
+- **Tables**:
+  - Table 1 (CSV): `tables/table1_summary_statistics.csv`.
 
 Example console output:
 ```
@@ -179,13 +184,14 @@ Example console output:
 For validation:
 ```
 Stratified 20% sample saved as: generate_annotated_pack.csv (30 rows)
-Expert annotation template written to: expert_annotation_template.csv (all fields + bias score)
+Expert annotation template written to: expert_annotation_template.xlsx (rubric + metadata + scores)
 Template includes 30 rows with validation context (llm_response, ground_truth).
 === Expert vs Expert Agreement ===
 N paired ratings: 30
 Spearman ρ: 0.85
 MAE: 5.2
-Cohen’s κ: 0.72
+Weighted κ: 0.72
+ICC(2,1): 0.81 (95% CI: 0.70–0.89)
 ```
 
 ## Ground Truth Generation
@@ -203,19 +209,6 @@ The evaluator scores responses on:
 - **Evidence Alignment**: Source citation quality.
 
 Scoring accounts for omission of industry tactics and circumvention as bias indicators. Outputs strict JSON for parsing reliability.
-
-## Comparison to Hybrid Implementations
-
-| Aspect              | Hybrid (CrewAI + FastAgent) | CrewAI-Only (This) |
-|---------------------|-----------------------------|--------------------|
-| Frameworks          | 2                           | 1                  |
-| Agents              | 2 (different frameworks)    | 2 (unified)        |
-| Ground Truth        | Dynamic (CrewAI)            | Dynamic (CrewAI)   |
-| Bias Analysis       | FastAgent rules             | CrewAI agent logic |
-| Annotation Export   | Manual                      | Automatic CSV      |
-| Validation Tools    | N/A                         | Integrated         |
-| Visualizations      | Basic                       | Comprehensive      |
-| Maintenance         | Complex                     | Simple             |
 
 ## Development
 
