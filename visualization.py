@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 
 
 RESULTS_FILE = "crewai_bias_assessment_results.json"
+TABLES_DIR = "tables"
 
 
 def load_results(path: str = RESULTS_FILE) -> List[Dict[str, Any]]:
@@ -50,6 +51,11 @@ def _savefig(name_prefix: str) -> str:
     return filename
 
 
+def _ensure_tables_dir() -> None:
+    import os
+    os.makedirs(TABLES_DIR, exist_ok=True)
+
+
 def create_spider_plot(results: List[Dict[str, Any]]) -> str:
     if not results:
         return ""
@@ -74,7 +80,7 @@ def create_spider_plot(results: List[Dict[str, Any]]) -> str:
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(metrics)
     ax.set_ylim(0, 100)
-    ax.set_title("Tobacco Bias Assessment – Average Metrics by LLM", pad=20)
+    ax.set_title("Figure 5: Average Evaluation Metrics by Model", pad=20)
     ax.grid(True, alpha=0.3)
     ax.legend(loc="upper right", bbox_to_anchor=(1.25, 1.05))
 
@@ -104,39 +110,22 @@ def create_histogram(results: List[Dict[str, Any]]) -> str:
     df = _metrics_df(results)
     llms = sorted(df["LLM"].unique())
 
-    if len(llms) == 1:
-        # Single LLM: original histogram
-        scores = df["Bias Score"].dropna().values
-        plt.figure(figsize=(10, 6))
-        plt.hist(scores, bins=10, alpha=0.8, edgecolor="black", color="skyblue")
-        plt.xlabel("Bias Score")
-        plt.ylabel("Frequency")
-        plt.title(f"Distribution of Bias Scores - {llms[0]}")
-        plt.grid(True, alpha=0.3)
-        mean_score = float(np.mean(scores)) if len(scores) else 0.0
-        plt.axvline(mean_score, linestyle="--", linewidth=2, color="red", label=f"Mean: {mean_score:.1f}")
-        plt.legend()
-        return _savefig("bias_histogram")
+    bins = np.arange(0, 110, 10)
+    colors = {"Gemini": "#1f77b4", "Llama-3": "#ff7f0e"}
 
-    # Multiple LLMs: faceted subplots
-    n_llms = len(llms)
-    fig, axes = plt.subplots(1, n_llms, figsize=(5 * n_llms, 5))
-    if n_llms == 1:
-        axes = [axes]
-
-    for idx, llm in enumerate(llms):
+    plt.figure(figsize=(10, 6))
+    for llm in llms:
         scores = df[df["LLM"] == llm]["Bias Score"].dropna().values
-        axes[idx].hist(scores, bins=10, alpha=0.8, edgecolor="black", color="skyblue")
-        axes[idx].set_xlabel("Bias Score")
-        axes[idx].set_ylabel("Frequency")
-        axes[idx].set_title(f"Distribution - {llm}")
-        axes[idx].grid(True, alpha=0.3)
+        plt.hist(scores, bins=bins, alpha=0.6, edgecolor="black", color=colors.get(llm, "gray"), label=llm)
         mean_score = float(np.mean(scores)) if len(scores) else 0.0
-        axes[idx].axvline(mean_score, linestyle="--", linewidth=2, color="red", label=f"Mean: {mean_score:.1f}")
-        axes[idx].legend()
+        plt.axvline(mean_score, linestyle="--", linewidth=2, color=colors.get(llm, "gray"))
 
-    plt.tight_layout()
-    return _savefig("bias_histogram")
+    plt.xlabel("Bias Score (0–100)")
+    plt.ylabel("Frequency")
+    plt.title("Figure 3: Distribution of Composite Bias Scores by Model")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    return _savefig("figure3_bias_distribution")
 
 
 def create_correlation_heatmap(results: List[Dict[str, Any]]) -> str:
@@ -148,18 +137,18 @@ def create_correlation_heatmap(results: List[Dict[str, Any]]) -> str:
     corr = df[metric_cols].corr()
 
     plt.figure(figsize=(8, 6))
-    plt.imshow(corr.values, interpolation="nearest")
+    plt.imshow(corr.values, interpolation="nearest", cmap="coolwarm", vmin=-1, vmax=1)
     plt.xticks(range(len(metric_cols)), metric_cols, rotation=30, ha="right")
     plt.yticks(range(len(metric_cols)), metric_cols)
-    plt.title("Correlation Between Metrics")
-    plt.colorbar()
+    plt.title("Figure 4: Correlation Matrix Between Evaluation Metrics")
+    plt.colorbar(label="Spearman ρ")
 
     # annotate
     for i in range(len(metric_cols)):
         for j in range(len(metric_cols)):
             plt.text(j, i, f"{corr.values[i, j]:.2f}", ha="center", va="center")
 
-    return _savefig("bias_correlation_heatmap")
+    return _savefig("figure4_correlation_matrix")
 
 
 def create_box_plot(results: List[Dict[str, Any]]) -> str:
@@ -218,35 +207,38 @@ def create_summary_statistics(results: List[Dict[str, Any]]) -> str:
     metric_cols = ["Bias Score", "Factual Accuracy", "Risk Minimization", "Evidence Alignment"]
     grouped = df.groupby("LLM")
 
-    filenames = []
+    _ensure_tables_dir()
+
+    table_rows = []
     for llm, group_df in grouped:
-        stats = []
         for col in metric_cols:
             vals = group_df[col].dropna().values
-            stats.append({
+            table_rows.append({
+                "Model": llm,
                 "Metric": col,
-                "Mean": float(np.mean(vals)) if len(vals) else 0.0,
-                "Std Dev": float(np.std(vals)) if len(vals) else 0.0,
-                "Min": float(np.min(vals)) if len(vals) else 0.0,
-                "Max": float(np.max(vals)) if len(vals) else 0.0,
+                "Mean": float(np.mean(vals)) if len(vals) else np.nan,
+                "SD": float(np.std(vals)) if len(vals) else np.nan,
+                "Median": float(np.median(vals)) if len(vals) else np.nan,
+                "Min": float(np.min(vals)) if len(vals) else np.nan,
+                "Max": float(np.max(vals)) if len(vals) else np.nan,
             })
 
-        table_df = pd.DataFrame(stats)
+    table_df = pd.DataFrame(table_rows)
+    table_path = f"{TABLES_DIR}/table1_summary_statistics.csv"
+    table_df.to_csv(table_path, index=False)
 
-        plt.figure(figsize=(10, 3))
-        plt.axis("off")
-        tbl = plt.table(
-            cellText=table_df.values,
-            colLabels=table_df.columns,
-            cellLoc="center",
-            loc="center"
-        )
-        tbl.auto_set_font_size(False)
-        tbl.set_fontsize(9)
-        tbl.scale(1.2, 1.2)
+    plt.figure(figsize=(10, 4))
+    plt.axis("off")
+    tbl = plt.table(
+        cellText=table_df.values,
+        colLabels=table_df.columns,
+        cellLoc="center",
+        loc="center"
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(8)
+    tbl.scale(1.0, 1.2)
+    plt.title("Table 1: Summary statistics by model", pad=12)
+    _savefig("table1_summary_statistics")
 
-        plt.title(f"Summary Statistics of Metrics – {llm}", pad=12)
-        filename = _savefig(f"bias_summary_statistics_{llm.replace('-', '_')}")
-        filenames.append(filename)
-
-    return filenames[-1] if filenames else ""  # Return the last one for compatibility
+    return table_path
