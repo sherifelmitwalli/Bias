@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import time
+import random
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
@@ -42,7 +43,7 @@ load_dotenv()
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-JUDGE_MODEL = os.getenv("JUDGE_MODEL", "openai/gpt-4o-mini")
+JUDGE_MODEL = os.getenv("JUDGE_MODEL", "openai/gpt-5.2")
 
 if not OPENROUTER_API_KEY:
     print("⚠️  OPENROUTER_API_KEY not set. LLM calls will fail unless you set it in .env")
@@ -64,6 +65,7 @@ REPORT_FILE = "report.txt"
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "outputs")
 FIGURES_DIR = os.path.join(OUTPUT_DIR, "figures")
 ANNOTATIONS_DIR = os.path.join(OUTPUT_DIR, "annotations")
+CACHE_FILE = os.path.join(OUTPUT_DIR, "baseline_cache.json")
 
 
 # ----------------------------
@@ -84,6 +86,26 @@ def sha256_file(path: str) -> str:
 def make_response_id(run_id: str, query_id: int, llm: str) -> str:
     raw = f"{run_id}|{query_id}|{llm}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:12]
+
+
+def hash_baseline(text: str) -> str:
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def load_baseline_cache() -> Dict[str, Any]:
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def save_baseline_cache(cache: Dict[str, Any]) -> None:
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2, ensure_ascii=False)
 
 
 def export_annotation_pack_informed(
@@ -249,6 +271,32 @@ def load_queries() -> Tuple[List[Dict[str, Any]], str]:
         return payload, dataset_version
 
     raise ValueError("Unexpected llm_bias_queries.json format. Expected list or {tobacco_bias_queries: [...]}.")
+
+
+def select_50_queries(queries: List[Dict[str, Any]], seed: int = 42) -> List[Dict[str, Any]]:
+    """Select a stratified subset of 50 queries across categories."""
+    if len(queries) <= 50:
+        return queries
+
+    rng = random.Random(seed)
+    by_cat: Dict[str, List[Dict[str, Any]]] = {}
+    for q in queries:
+        cat = q.get("category", "unknown")
+        by_cat.setdefault(cat, []).append(q)
+
+    selected: List[Dict[str, Any]] = []
+    total = len(queries)
+    for cat, qs in by_cat.items():
+        n = max(1, round(50 * len(qs) / total))
+        selected.extend(rng.sample(qs, min(n, len(qs))))
+
+    if len(selected) > 50:
+        selected = rng.sample(selected, 50)
+    elif len(selected) < 50:
+        remaining = [q for q in queries if q not in selected]
+        selected.extend(rng.sample(remaining, min(50 - len(selected), len(remaining))))
+
+    return selected
 
 
 def robust_json_load(s: Any) -> Dict[str, Any]:
@@ -446,6 +494,7 @@ async def main():
 
     # Load queries + dataset version hash
     queries, dataset_version = load_queries()
+    queries = select_50_queries(queries)
     if n_queries is not None:
         queries = queries[: max(0, int(n_queries))]
 
@@ -459,6 +508,7 @@ async def main():
     print(f"▶️  Dataset version (sha256): {dataset_version[:12]}...")
 
     results: List[Dict[str, Any]] = []
+    baseline_cache = load_baseline_cache()
 
     # IMPORTANT: baseline should be generated once per query and reused across all LLMs for fairness.
     for idx, query_data in enumerate(queries, start=1):
@@ -471,12 +521,26 @@ async def main():
             print(f"⚠️  Skipping empty query at index {idx}")
             continue
 
-        # Baseline (evidence-aligned) once per query
-        ground_truth, ground_truth_source = await generate_ground_truth_with_fallback(
-            crew_base=crew_base,
-            query=query,
-            query_data=query_data
-        )
+        # Baseline (evidence-aligned) once per query (cache for reproducibility)
+        cache_key = str(query_id)
+        if cache_key in baseline_cache:
+            cache_entry = baseline_cache[cache_key]
+            ground_truth = cache_entry.get("ground_truth", "")
+            ground_truth_source = cache_entry.get("ground_truth_source", "cached")
+            baseline_hash = cache_entry.get("baseline_hash", hash_baseline(ground_truth)) if ground_truth else ""
+        else:
+            ground_truth, ground_truth_source = await generate_ground_truth_with_fallback(
+                crew_base=crew_base,
+                query=query,
+                query_data=query_data
+            )
+            baseline_hash = hash_baseline(ground_truth)
+            baseline_cache[cache_key] = {
+                "ground_truth": ground_truth,
+                "ground_truth_source": ground_truth_source,
+                "baseline_hash": baseline_hash
+            }
+            save_baseline_cache(baseline_cache)
 
         for llm_name in llms:
             model = LLM_MODEL_MAPPING.get(llm_name, llm_name)
@@ -512,6 +576,7 @@ async def main():
                 "llm_response": llm_response,
                 "ground_truth": ground_truth,
                 "ground_truth_source": ground_truth_source,
+                "baseline_hash": baseline_hash,
 
                 "bias_indicators": bias_indicators,
                 "unbiased_example": query_data.get("unbiased_response", ""),
@@ -521,7 +586,10 @@ async def main():
 
                 "run_meta": {
                     "ts_utc": int(time.time()),
-                    "app_version": "1.1-fixed+expertpack",
+                    "app_version": "1.2-manuscript-aligned",
+                    "judge_model": JUDGE_MODEL,
+                    "n_queries": len(queries),
+                    "n_models": len(llms)
                 }
             })
 
