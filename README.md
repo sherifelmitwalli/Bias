@@ -219,7 +219,7 @@ Scoring accounts for omission of industry tactics and circumvention as bias indi
 
 ## License
 
-MIT License (or specify as needed). See `LICENSE` file if present.
+MIT License. Copyright (c) 2026 University of Bath. See LICENSE file for details.
 
 ## Contributing
 
