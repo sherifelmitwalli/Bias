@@ -37,7 +37,7 @@ A unified **CrewAI-only** implementation for assessing industry-aligned bias in 
    pip install -r requirements.txt
    ```
 
-   Core packages: `crewai`, `crewai-tools`, `python-dotenv`, `pyyaml`, `requests`, `numpy`, `matplotlib`, `pandas`, `scipy`, `scikit-learn`, `pingouin`, `openpyxl`, `python-docx`.
+   Core packages: `crewai`, `crewai-tools`, `python-dotenv`, `pyyaml`, `requests`, `numpy`, `matplotlib`, `pandas`, `scipy`, `scikit-learn`, `pingouin`, `openpyxl`.
 
 3. Set up `.env` (not committed to Git):
    ```
@@ -90,7 +90,7 @@ python make_expert_template.py
 Scoring columns in the template:
 - `expert_factual_accuracy` (0–100)
 - `expert_evidence_alignment` (0–100)
-- `expert_risk_minimisation_avoidance` (0–100)
+- `expert_risk_minimization` (0–100)
 - `expert_overall_bias` (0–100) — primary outcome
 - `expert_notes` — optional
 
