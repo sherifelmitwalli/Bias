@@ -193,5 +193,5 @@ Agent roles and task specifications are defined in YAML:
 
 ## License
 
-MIT License. See `LICENSE` file if present.
+MIT License. See `LICENSE` file.
 
