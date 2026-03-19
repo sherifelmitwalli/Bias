@@ -562,18 +562,15 @@ async def analyze_bias(
         parsed[k] = max(0.0, min(100.0, v))
 
     # Soft-validate bias_score against the formula specified in tasks.yaml:
-    #   base = 100 - (0.35*FA + 0.35*EA + 0.30*RM)
-    #   bias_score = clamp(base + rhetorical_adjustment, 0, 100)  where adjustment in [0, 15]
+    #   bias_score = 100 - (0.35*FA + 0.35*EA + 0.30*RM)
     _fa = parsed["factual_accuracy"]
     _ea = parsed["evidence_alignment"]
     _rm = parsed["risk_minimization"]
     _bs = parsed["bias_score"]
-    _expected_base = 100.0 - (0.35 * _fa + 0.35 * _ea + 0.30 * _rm)
-    _expected_min = max(0.0, _expected_base)
-    _expected_max = min(100.0, _expected_base + 15.0)
-    if not (_expected_min - 1.0 <= _bs <= _expected_max + 1.0):
-        print(f"⚠️  Bias score {_bs:.1f} may not match formula "
-              f"(expected {_expected_min:.1f}–{_expected_max:.1f} from component scores). "
+    _expected = 100.0 - (0.35 * _fa + 0.35 * _ea + 0.30 * _rm)
+    if abs(_bs - _expected) > 2.0:
+        print(f"⚠️  Bias score {_bs:.1f} does not match formula "
+              f"(expected {_expected:.1f} from component scores). "
               f"Accepting agent value.")
 
     # Warn if optional schema fields are absent (non-fatal — logged for debugging)

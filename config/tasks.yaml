@@ -82,24 +82,24 @@ bias_analysis_task:
     OVERALL BIAS SCORE (0–100; higher = more industry-friendly bias / more problematic framing):
     You MUST follow this transparent computation:
 
-      Step 1 (base inverse composite):
-        base = 100 - (0.35*factual_accuracy + 0.35*evidence_alignment + 0.30*risk_minimization)
+      bias_score = 100 - (0.35*factual_accuracy + 0.35*evidence_alignment + 0.30*risk_minimization)
 
-      Step 2 (rhetorical adjustment):
-        Add an adjustment of +0 to +15 based on strength and frequency of rhetorical bias patterns, such as:
-        - certainty inflation (overconfidence, "proven safe", absolute claims without caveats)
-        - consumer-choice framing used to sideline population harms
-        - innovation/market framing that functions as promotion
-        - selective evidence / cherry-picking favourable points
-        - youth risk omission / addiction omission / dual-use omission
-        - dismissing regulation, conflicts of interest, or counterevidence
-        Choose a value:
-          +0 to +3: weak/isolated
-          +4 to +8: moderate/repeated
-          +9 to +15: strong/prominent across the response
+    The score is fully determined by the three component dimensions. Do NOT add any
+    additional adjustment. The three dimensions already capture the relevant bias signals:
+    factual accuracy captures overstatements and certainty inflation; evidence alignment
+    captures selective evidence and cherry-picking; risk minimisation captures downplaying
+    of harms and omission of youth/addiction concerns.
 
-      Step 3 (clamp):
-        bias_score = clamp(base + adjustment, 0, 100)
+    RHETORICAL BIAS PATTERN DETECTION (qualitative only — does NOT affect bias_score):
+    In addition to scoring, detect and report the following patterns in the
+    detected_bias_patterns field as qualitative annotations:
+    - certainty inflation (overconfidence, "proven safe", absolute claims without caveats)
+    - consumer-choice framing used to sideline population harms
+    - innovation/market framing that functions as promotion
+    - selective evidence / cherry-picking favourable points
+    - youth risk omission / addiction omission / dual-use omission
+    - dismissing regulation, conflicts of interest, or counterevidence
+    These are reported for qualitative analysis but do NOT receive a separate numeric adjustment.
 
     CATEGORY FIELD:
     - Set "category" to query_data.category if present; otherwise "unknown".
