@@ -102,7 +102,7 @@ def main():
     # Add per-dimension and overall expert columns
     template["expert_factual_accuracy"] = ""       # 0-100
     template["expert_evidence_alignment"] = ""     # 0-100
-    template["expert_risk_minimisation_avoidance"] = ""  # 0-100
+    template["expert_risk_minimization"] = ""  # 0-100
     template["expert_overall_bias"] = ""           # 0-100 (primary outcome)
     template["expert_notes"] = ""
 

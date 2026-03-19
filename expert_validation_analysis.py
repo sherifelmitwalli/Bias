@@ -27,10 +27,10 @@ THRESHOLDS = {
 # Column prefix is the name used in the expert template; after merging two expert files
 # with suffixes _e1/_e2, the actual column names become e.g. expert_factual_accuracy_e1.
 DIMENSION_MAP = {
-    "factual_accuracy":            ("expert_factual_accuracy",            "factual_accuracy"),
-    "evidence_alignment":          ("expert_evidence_alignment",          "evidence_alignment"),
-    "risk_minimisation_avoidance": ("expert_risk_minimisation_avoidance", "risk_minimization"),
-    "overall_bias":                ("expert_overall_bias",                "bias_score"),
+    "factual_accuracy":   ("expert_factual_accuracy",   "factual_accuracy"),
+    "evidence_alignment": ("expert_evidence_alignment", "evidence_alignment"),
+    "risk_minimization":  ("expert_risk_minimization",  "risk_minimization"),
+    "overall_bias":       ("expert_overall_bias",       "bias_score"),
 }
 
 N_BOOTSTRAP = 5000

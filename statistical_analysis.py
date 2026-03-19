@@ -120,7 +120,8 @@ def main():
     print(f"Paired queries (all models scored): {n_paired} / {n_total}")
 
     if n_paired < 2:
-        print("⚠ Fewer than 2 paired queries — skipping inferential tests.")
+        print("⚠ Fewer than 2 paired queries — skipping inferential tests. "
+              "No comparison CSVs will be written.")
     elif len(models) == 2:
         # ---------------------------------------------------------------
         # 2 models: Wilcoxon signed-rank (paired)

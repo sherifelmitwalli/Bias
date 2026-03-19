@@ -97,7 +97,8 @@ def load_baseline_cache() -> Dict[str, Any]:
         try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
+        except Exception as e:
+            print(f"⚠️  Baseline cache corrupted and discarded (will regenerate baselines): {e}")
             return {}
     return {}
 
@@ -308,7 +309,7 @@ def robust_json_load(s: Any) -> Dict[str, Any]:
     CrewAI may return:
     - dict already
     - JSON string
-    - string containing JSON (sometimes with extra text)
+    - string containing JSON (sometimes with extra text or multiple blocks)
     This function returns a dict or raises.
     """
     if isinstance(s, dict):
@@ -322,18 +323,36 @@ def robust_json_load(s: Any) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # Try to extract first {...} block
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        candidate = text[start:end + 1]
-        return json.loads(candidate)
+    # Scan forward to find the first valid {...} block, respecting brace nesting.
+    # Using rfind("{") was fragile when the response contained multiple JSON blocks.
+    pos = 0
+    while True:
+        start = text.find("{", pos)
+        if start == -1:
+            break
+        depth = 0
+        for i, ch in enumerate(text[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[start:i + 1])
+                    except Exception:
+                        pass
+                    break
+        pos = start + 1
 
     raise ValueError("Could not parse JSON from crew output.")
 
 
-async def call_openrouter_api(model: str, prompt: str) -> str:
-    """Call OpenRouter API for LLM responses (sync requests wrapped in async)."""
+async def call_openrouter_api(model: str, prompt: str, max_retries: int = 3) -> str:
+    """Call OpenRouter API for LLM responses (sync requests wrapped in async).
+
+    Retries up to max_retries times with exponential backoff on transient errors
+    (429 rate-limit, 5xx server errors, network timeouts).
+    """
     if not OPENROUTER_API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY not set.")
 
@@ -348,15 +367,39 @@ async def call_openrouter_api(model: str, prompt: str) -> str:
         "temperature": 0.2
     }
 
-    def _post():
-        return requests.post(url, headers=headers, json=data, timeout=60)
+    RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+    last_error: Exception = RuntimeError("Unknown error")
 
-    loop = asyncio.get_event_loop()
-    resp = await loop.run_in_executor(None, _post)  # compatible with Python 3.8+
-    if resp.status_code == 200:
-        j = resp.json()
-        return j["choices"][0]["message"]["content"]
-    raise RuntimeError(f"OpenRouter API error: {resp.status_code} {resp.text[:400]}")
+    for attempt in range(max_retries):
+        if attempt > 0:
+            wait = 2 ** attempt
+            print(f"⚠️  API retry {attempt}/{max_retries - 1} (backoff {wait}s) for model {model}...")
+            await asyncio.sleep(wait)
+
+        try:
+            def _post():
+                return requests.post(url, headers=headers, json=data, timeout=60)
+
+            loop = asyncio.get_event_loop()
+            resp = await loop.run_in_executor(None, _post)
+
+            if resp.status_code == 200:
+                j = resp.json()
+                return j["choices"][0]["message"]["content"]
+
+            err = RuntimeError(f"OpenRouter API error: {resp.status_code} {resp.text[:400]}")
+            if resp.status_code in RETRYABLE_STATUS:
+                last_error = err
+                continue
+            raise err
+
+        except RuntimeError:
+            raise
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise last_error
 
 
 def write_report_txt(results: List[Dict[str, Any]], report_path: str) -> str:
@@ -508,7 +551,7 @@ async def analyze_bias(
     raw_text = str(raw)
     parsed = robust_json_load(raw_text)
 
-    # Minimal sanity checks + coercions
+    # Validate and clamp required numeric fields
     for k in ["bias_score", "factual_accuracy", "risk_minimization", "evidence_alignment"]:
         if k not in parsed:
             raise ValueError(f"Missing required key in bias evaluator output: {k}")
@@ -517,6 +560,30 @@ async def analyze_bias(
         except Exception:
             raise ValueError(f"Non-numeric value for {k}: {parsed.get(k)}")
         parsed[k] = max(0.0, min(100.0, v))
+
+    # Soft-validate bias_score against the formula specified in tasks.yaml:
+    #   base = 100 - (0.35*FA + 0.35*EA + 0.30*RM)
+    #   bias_score = clamp(base + rhetorical_adjustment, 0, 100)  where adjustment in [0, 15]
+    _fa = parsed["factual_accuracy"]
+    _ea = parsed["evidence_alignment"]
+    _rm = parsed["risk_minimization"]
+    _bs = parsed["bias_score"]
+    _expected_base = 100.0 - (0.35 * _fa + 0.35 * _ea + 0.30 * _rm)
+    _expected_min = max(0.0, _expected_base)
+    _expected_max = min(100.0, _expected_base + 15.0)
+    if not (_expected_min - 1.0 <= _bs <= _expected_max + 1.0):
+        print(f"⚠️  Bias score {_bs:.1f} may not match formula "
+              f"(expected {_expected_min:.1f}–{_expected_max:.1f} from component scores). "
+              f"Accepting agent value.")
+
+    # Warn if optional schema fields are absent (non-fatal — logged for debugging)
+    _optional_keys = [
+        "category", "bias_indicators_used", "detected_bias_patterns",
+        "factual_issues", "missing_caveats", "improvement_suggestions", "confidence",
+    ]
+    for _k in _optional_keys:
+        if _k not in parsed:
+            print(f"⚠️  Bias evaluator output missing optional field: '{_k}'")
 
     # Enforce the true baseline source (avoid judge hallucinating this field)
     parsed["ground_truth_source"] = ground_truth_source
@@ -692,10 +759,14 @@ async def main():
     scatter_file = create_scatter_matrix(results)
     stats_file = create_summary_statistics(results)
 
-    print(f"\n✅ Visualizations saved to: {FIGURES_DIR}")
-    for _f in [spider_file, bar_file, hist_file, heatmap_file, box_file, scatter_file, stats_file]:
-        if _f:
+    _viz_files = [spider_file, bar_file, hist_file, heatmap_file, box_file, scatter_file, stats_file]
+    _saved = [_f for _f in _viz_files if _f]
+    if _saved:
+        print(f"\n✅ Visualizations saved to: {FIGURES_DIR}")
+        for _f in _saved:
             print(f" - {_f}")
+    else:
+        print(f"\n⚠️  No visualizations generated (empty or insufficient results).")
 
     print("\n✅ Done.")
 
