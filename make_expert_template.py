@@ -7,17 +7,34 @@ from pathlib import Path
 import pandas as pd
 import json
 
-INPUT_FULL_PACK = Path("annotation_pack.csv")  # Full original annotated file
-OUTPUT_SAMPLED_PACK = Path("generate_annotated_pack.csv")
-OUTPUT_TEMPLATE = Path("expert_annotation_template.csv")
+ANNOTATIONS_DIR = Path("outputs/annotations")
+OUTPUT_SAMPLED_PACK = Path("outputs/annotations/generate_annotated_pack.csv")
+OUTPUT_TEMPLATE = Path("outputs/annotations/expert_annotation_template.csv")
+
+
+def _find_annotation_pack() -> Path:
+    """Return the most recent annotation_pack_informed_*.csv, falling back to annotation_pack.csv."""
+    candidates = sorted(ANNOTATIONS_DIR.glob("annotation_pack_informed_*.csv"))
+    if candidates:
+        return candidates[-1]
+    fallback = ANNOTATIONS_DIR / "annotation_pack.csv"
+    if fallback.exists():
+        return fallback
+    raise FileNotFoundError(
+        f"No annotation pack found in {ANNOTATIONS_DIR}. "
+        "Run the pipeline first to generate annotation_pack_informed_*.csv"
+    )
 
 
 def main():
+    ANNOTATIONS_DIR.mkdir(parents=True, exist_ok=True)
+
     # Load full annotation pack
+    INPUT_FULL_PACK = _find_annotation_pack()
     full_pack = pd.read_csv(INPUT_FULL_PACK)
 
     # Load judge results for context
-    JUDGE_JSON = Path("crewai_bias_assessment_results.json")
+    JUDGE_JSON = Path("outputs/crewai_bias_assessment_results.json")
     with open(JUDGE_JSON, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -34,7 +51,11 @@ def main():
     judge_df = pd.DataFrame(judge_df_list).drop_duplicates(subset=["llm", "query"])
 
     # Merge full pack with judge for stratification
-    merged_full = full_pack.merge(judge_df, on=["llm", "query"], how="left")
+    # Drop 'category' from judge_df if it already exists in full_pack to avoid _x/_y collision
+    merge_cols = ["llm", "query"]
+    if "category" in full_pack.columns and "category" in judge_df.columns:
+        judge_df = judge_df.drop(columns=["category"])
+    merged_full = full_pack.merge(judge_df, on=merge_cols, how="left")
 
     # Check if category is available for stratification
     if 'category' not in merged_full.columns or merged_full['category'].isna().all():
@@ -78,13 +99,16 @@ def main():
     if missing:
         raise ValueError(f"Sampled data missing columns: {missing}")
 
-    # Add expert columns (bias score only)
-    template["expert_bias_score"] = ""
+    # Add per-dimension and overall expert columns
+    template["expert_factual_accuracy"] = ""       # 0-100
+    template["expert_evidence_alignment"] = ""     # 0-100
+    template["expert_risk_minimisation_avoidance"] = ""  # 0-100
+    template["expert_overall_bias"] = ""           # 0-100 (primary outcome)
     template["expert_notes"] = ""
 
     template.to_csv(OUTPUT_TEMPLATE, index=False)
-    print(f"Expert annotation template written to: {OUTPUT_TEMPLATE} (all fields + bias score)")
-    print(f"Template includes {len(template)} rows with validation context (llm_response, ground_truth).")
+    print(f"Expert annotation template written to: {OUTPUT_TEMPLATE}")
+    print(f"Template includes {len(template)} rows with 4 rating dimensions + notes.")
 
 
 if __name__ == "__main__":

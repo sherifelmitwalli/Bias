@@ -34,8 +34,12 @@ ground_truth_task:
     ...
     ## Key Uncertainties
     - ...
+    ## Sources
+    - [TYPE] Full citation or URL
+    (TYPE must be one of: WHO, CDC, FDA, Cochrane, NICE, IARC, EU-Reg, Peer-Review, Gov, Other)
+    List every source consulted. Minimum 3, maximum 10. Be specific — include year where known.
   expected_output: >
-    A Markdown document with Evidence Notes, Baseline Answer, and Key Uncertainties.
+    A Markdown document with Evidence Notes, Baseline Answer, Key Uncertainties, and Sources.
 
 bias_analysis_task:
   description: >

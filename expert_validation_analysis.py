@@ -23,12 +23,15 @@ THRESHOLDS = {
     "weighted_kappa_substantial": 0.61,
 }
 
-DIMENSIONS = [
-    "factual_accuracy",
-    "evidence_alignment",
-    "risk_minimisation_avoidance",
-    "overall_bias",
-]
+# Maps display name -> (merged-df column prefix, AI results field in crew_result)
+# Column prefix is the name used in the expert template; after merging two expert files
+# with suffixes _e1/_e2, the actual column names become e.g. expert_factual_accuracy_e1.
+DIMENSION_MAP = {
+    "factual_accuracy":            ("expert_factual_accuracy",            "factual_accuracy"),
+    "evidence_alignment":          ("expert_evidence_alignment",          "evidence_alignment"),
+    "risk_minimisation_avoidance": ("expert_risk_minimisation_avoidance", "risk_minimization"),
+    "overall_bias":                ("expert_overall_bias",                "bias_score"),
+}
 
 N_BOOTSTRAP = 5000
 SEED = 42
@@ -75,8 +78,13 @@ def compute_icc(scores1, scores2, item_ids):
 
 def weighted_kappa(scores1, scores2, bins=(0, 33.333, 66.666, 100.0)):
     labels = ["low", "medium", "high"]
-    b1 = pd.cut(scores1, bins=bins, labels=labels, include_lowest=True)
-    b2 = pd.cut(scores2, bins=bins, labels=labels, include_lowest=True)
+    s1 = pd.Series(scores1)
+    s2 = pd.Series(scores2)
+    valid = ~s1.isna() & ~s2.isna()
+    if valid.sum() < 2:
+        return np.nan
+    b1 = pd.cut(s1[valid], bins=bins, labels=labels, include_lowest=True)
+    b2 = pd.cut(s2[valid], bins=bins, labels=labels, include_lowest=True)
     return float(cohen_kappa_score(b1, b2, weights="quadratic", labels=labels))
 
 
@@ -122,13 +130,21 @@ def load_ai_scores(results_path: Path):
 
 
 def per_dimension_agreement(e1_df, e2_df, ai_results, item_ids):
+    """
+    Compute judge-vs-expert-mean ICC, Spearman, and MAE for each scored dimension.
+
+    e1_df / e2_df are the full merged dataframes (both contain _e1 and _e2 suffixed
+    columns). Column names follow the expert template convention:
+      expert_factual_accuracy_e1 / _e2, expert_evidence_alignment_e1 / _e2, etc.
+    AI result fields use the crew_result key names (factual_accuracy, risk_minimization, etc.).
+    """
     if ai_results is None:
         return {}
 
     dim_results = {}
-    for dim in DIMENSIONS:
-        e1_col = dim
-        e2_col = dim
+    for dim_name, (col_prefix, ai_field) in DIMENSION_MAP.items():
+        e1_col = f"{col_prefix}_e1"
+        e2_col = f"{col_prefix}_e2"
         if e1_col not in e1_df.columns or e2_col not in e2_df.columns:
             continue
 
@@ -142,16 +158,17 @@ def per_dimension_agreement(e1_df, e2_df, ai_results, item_ids):
         e2_vals = e2_vals[valid_mask]
         ids = np.array(item_ids)[valid_mask]
 
+        # Build AI score lookup using the correct crew_result field name
         ai_dim_map = {}
         for rec in ai_results:
             query = rec.get("query", "")
             llm = rec.get("llm", "")
-            score = rec.get("crew_result", {}).get(dim)
+            score = rec.get("crew_result", {}).get(ai_field)
             if query and llm and score is not None:
                 ai_dim_map[(query, llm)] = float(score)
 
         j_vals = []
-        for qid, row in zip(ids, e1_df.iloc[valid_mask].to_dict("records")):
+        for qid, row in zip(ids, e1_df[valid_mask].to_dict("records")):
             key = (row.get("query", ""), row.get("llm", ""))
             j_vals.append(ai_dim_map.get(key, np.nan))
         j_vals = np.array(j_vals, dtype=float)
@@ -164,7 +181,7 @@ def per_dimension_agreement(e1_df, e2_df, ai_results, item_ids):
         j_vals = j_vals[valid_j]
         ids = ids[valid_j]
 
-        dim_results[dim] = {
+        dim_results[dim_name] = {
             "icc": compute_icc(j_vals, e_mean, ids),
             "spearman": bootstrap_ci(spearman_func, j_vals, e_mean),
             "mae": bootstrap_ci(mae_func, j_vals, e_mean),
@@ -173,10 +190,25 @@ def per_dimension_agreement(e1_df, e2_df, ai_results, item_ids):
     return dim_results
 
 
+def _find_annotation_pack() -> Path:
+    """Return the most recent annotation_pack_informed_*.csv, falling back to annotation_pack.csv."""
+    ann_dir = Path("outputs/annotations")
+    candidates = sorted(ann_dir.glob("annotation_pack_informed_*.csv"))
+    if candidates:
+        return candidates[-1]
+    fallback = ann_dir / "annotation_pack.csv"
+    if fallback.exists():
+        return fallback
+    raise FileNotFoundError(
+        f"No annotation pack found in {ann_dir}. "
+        "Run make_expert_template.py first."
+    )
+
+
 def main():
-    annotation_pack = Path("annotation_pack.csv")
-    e1_path = Path("expert_1_annotations.csv")
-    e2_path = Path("expert_2_annotations.csv")
+    annotation_pack = _find_annotation_pack()
+    e1_path = Path("outputs/annotations/expert_1_annotations.csv")
+    e2_path = Path("outputs/annotations/expert_2_annotations.csv")
     results_path = Path("outputs/crewai_bias_assessment_results.json")
 
     pack = pd.read_csv(annotation_pack)
@@ -192,8 +224,16 @@ def main():
 
     merged = m1.merge(m2, on=merge_keys, suffixes=("_e1", "_e2"))
 
-    e1_bias = pd.to_numeric(merged.get("expert_bias_score_e1"), errors="coerce")
-    e2_bias = pd.to_numeric(merged.get("expert_bias_score_e2"), errors="coerce")
+    # Primary column name matches the expert template (expert_overall_bias).
+    # Fall back to expert_bias_score for any legacy annotation files.
+    def _get_bias_col(df: pd.DataFrame, suffix: str) -> pd.Series:
+        for col in (f"expert_overall_bias_{suffix}", f"expert_bias_score_{suffix}"):
+            if col in df.columns:
+                return pd.to_numeric(df[col], errors="coerce")
+        return pd.Series([float("nan")] * len(df), index=df.index)
+
+    e1_bias = _get_bias_col(merged, "e1")
+    e2_bias = _get_bias_col(merged, "e2")
 
     e1_df = merged.assign(expert_bias_score=e1_bias)
     e2_df = merged.assign(expert_bias_score=e2_bias)

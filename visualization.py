@@ -16,6 +16,18 @@ import matplotlib.pyplot as plt
 RESULTS_FILE = "crewai_bias_assessment_results.json"
 TABLES_DIR = "tables"
 
+# Output directory for saving figures and tables.
+# Override via set_output_dir() before calling any create_* function.
+_OUTPUT_DIR = "."
+
+
+def set_output_dir(path: str) -> None:
+    """Set the directory where all figures and tables are saved."""
+    global _OUTPUT_DIR
+    import os
+    os.makedirs(path, exist_ok=True)
+    _OUTPUT_DIR = path
+
 
 def load_results(path: str = RESULTS_FILE) -> List[Dict[str, Any]]:
     try:
@@ -44,16 +56,20 @@ def _metrics_df(results: List[Dict[str, Any]]) -> pd.DataFrame:
 
 
 def _savefig(name_prefix: str) -> str:
+    import os
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{name_prefix}_{timestamp}.png"
-    plt.savefig(filename, dpi=300, bbox_inches="tight", facecolor="white")
+    full_path = os.path.join(_OUTPUT_DIR, filename)
+    plt.savefig(full_path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close()
-    return filename
+    return full_path
 
 
-def _ensure_tables_dir() -> None:
+def _ensure_tables_dir() -> str:
     import os
-    os.makedirs(TABLES_DIR, exist_ok=True)
+    tables_path = os.path.join(_OUTPUT_DIR, TABLES_DIR)
+    os.makedirs(tables_path, exist_ok=True)
+    return tables_path
 
 
 def create_spider_plot(results: List[Dict[str, Any]]) -> str:
@@ -92,11 +108,11 @@ def create_bar_chart(results: List[Dict[str, Any]]) -> str:
         return ""
 
     df = _metrics_df(results)
-    grouped = df.groupby("LLM")["Bias Score"].mean().sort_values(ascending=False)
+    agg = df.groupby("LLM")["Bias Score"].agg(["mean", "std"]).sort_values("mean", ascending=False)
 
     plt.figure(figsize=(10, 6))
-    plt.bar(grouped.index, grouped.values)
-    plt.ylabel("Mean Bias Score (0–100)")
+    plt.bar(agg.index, agg["mean"], yerr=agg["std"], capsize=5, error_kw={"elinewidth": 1.5})
+    plt.ylabel("Mean Bias Score (0–100) ± SD")
     plt.title("Mean Bias Score by LLM (Higher = More Industry-Friendly Bias)")
     plt.ylim(0, 100)
 
@@ -111,14 +127,15 @@ def create_histogram(results: List[Dict[str, Any]]) -> str:
     llms = sorted(df["LLM"].unique())
 
     bins = np.arange(0, 110, 10)
-    colors = {"Gemini": "#1f77b4", "Llama-3": "#ff7f0e"}
+    palette = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    colors = {llm: palette[i % len(palette)] for i, llm in enumerate(llms)}
 
     plt.figure(figsize=(10, 6))
     for llm in llms:
         scores = df[df["LLM"] == llm]["Bias Score"].dropna().values
-        plt.hist(scores, bins=bins, alpha=0.6, edgecolor="black", color=colors.get(llm, "gray"), label=llm)
+        plt.hist(scores, bins=bins, alpha=0.6, edgecolor="black", color=colors[llm], label=llm)
         mean_score = float(np.mean(scores)) if len(scores) else 0.0
-        plt.axvline(mean_score, linestyle="--", linewidth=2, color=colors.get(llm, "gray"))
+        plt.axvline(mean_score, linestyle="--", linewidth=2, color=colors[llm])
 
     plt.xlabel("Bias Score (0–100)")
     plt.ylabel("Frequency")
@@ -134,7 +151,7 @@ def create_correlation_heatmap(results: List[Dict[str, Any]]) -> str:
 
     df = _metrics_df(results)
     metric_cols = ["Bias Score", "Factual Accuracy", "Risk Minimization", "Evidence Alignment"]
-    corr = df[metric_cols].corr()
+    corr = df[metric_cols].corr(method="spearman")
 
     plt.figure(figsize=(8, 6))
     plt.imshow(corr.values, interpolation="nearest", cmap="coolwarm", vmin=-1, vmax=1)
@@ -156,13 +173,28 @@ def create_box_plot(results: List[Dict[str, Any]]) -> str:
         return ""
 
     df = _metrics_df(results)
-    metric_cols = ["Bias Score", "Factual Accuracy", "Risk Minimization", "Evidence Alignment"]
+    llms = sorted(df["LLM"].unique())
 
-    plt.figure(figsize=(10, 6))
-    plt.boxplot([df[c].dropna().values for c in metric_cols], labels=metric_cols)
-    plt.ylabel("Score")
-    plt.title("Distribution of Bias Assessment Metrics")
-    plt.grid(True, alpha=0.3)
+    plt.figure(figsize=(12, 6))
+    n_models = len(llms)
+    positions_base = np.arange(1, n_models + 1, dtype=float)
+    palette = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+    for i, llm in enumerate(llms):
+        scores = df[df["LLM"] == llm]["Bias Score"].dropna().values
+        bp = plt.boxplot(
+            scores,
+            positions=[positions_base[i]],
+            widths=0.6,
+            patch_artist=True,
+            boxprops={"facecolor": palette[i % len(palette)], "alpha": 0.7},
+            medianprops={"color": "black", "linewidth": 2},
+        )
+
+    plt.xticks(positions_base, llms)
+    plt.ylabel("Bias Score (0–100)")
+    plt.title("Figure 2: Bias Score Distribution by Model")
+    plt.grid(True, alpha=0.3, axis="y")
 
     return _savefig("bias_box_plot")
 
@@ -207,7 +239,7 @@ def create_summary_statistics(results: List[Dict[str, Any]]) -> str:
     metric_cols = ["Bias Score", "Factual Accuracy", "Risk Minimization", "Evidence Alignment"]
     grouped = df.groupby("LLM")
 
-    _ensure_tables_dir()
+    tables_dir = _ensure_tables_dir()
 
     table_rows = []
     for llm, group_df in grouped:
@@ -223,8 +255,9 @@ def create_summary_statistics(results: List[Dict[str, Any]]) -> str:
                 "Max": float(np.max(vals)) if len(vals) else np.nan,
             })
 
+    import os
     table_df = pd.DataFrame(table_rows)
-    table_path = f"{TABLES_DIR}/table1_summary_statistics.csv"
+    table_path = os.path.join(tables_dir, "table1_summary_statistics.csv")
     table_df.to_csv(table_path, index=False)
 
     plt.figure(figsize=(10, 4))

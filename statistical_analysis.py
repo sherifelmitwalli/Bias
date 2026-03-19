@@ -1,21 +1,88 @@
 """
 statistical_analysis.py — between-model comparisons and correlation matrix.
+
+Design note: each query is answered by ALL evaluated models, so observations are
+PAIRED by query_id. Between-model tests must account for this dependency:
+  - 2 models  → Wilcoxon signed-rank test (paired)
+  - 3+ models → Friedman test (nonparametric repeated-measures), then pairwise
+                Wilcoxon signed-rank with Holm-Bonferroni correction
+Using Kruskal-Wallis or Mann-Whitney U would incorrectly assume independence.
 """
 
+import itertools
 import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import mannwhitneyu
+from scipy.stats import friedmanchisquare, rankdata, wilcoxon
 
 
 RESULTS_PATH = Path("outputs/crewai_bias_assessment_results.json")
 OUTPUT_DIR = Path("outputs/statistical_analysis")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _holm_bonferroni(p_values):
+    """Return Holm-Bonferroni adjusted p-values for a list of raw p-values."""
+    n = len(p_values)
+    order = np.argsort(p_values)
+    adjusted = np.zeros(n)
+    for rank, idx in enumerate(order):
+        adjusted[idx] = min(1.0, p_values[idx] * (n - rank))
+    running_max = 0.0
+    for rank in range(n):
+        idx = order[rank]
+        adjusted[idx] = max(adjusted[idx], running_max)
+        running_max = adjusted[idx]
+    return adjusted
+
+
+def _rank_biserial_r(s1: np.ndarray, s2: np.ndarray) -> float:
+    """
+    Rank-biserial correlation for the Wilcoxon signed-rank test.
+    r = (R+ - R-) / (R+ + R-), where R+ and R- are sums of positive and
+    negative signed ranks after removing zero-differences.
+    Ranges from -1 (s2 always larger) to +1 (s1 always larger).
+    """
+    diffs = s1 - s2
+    nonzero = diffs[diffs != 0]
+    if len(nonzero) == 0:
+        return 0.0
+    ranks = rankdata(np.abs(nonzero))
+    r_plus = float(np.sum(ranks[nonzero > 0]))
+    r_minus = float(np.sum(ranks[nonzero < 0]))
+    total = r_plus + r_minus
+    return (r_plus - r_minus) / total if total > 0 else 0.0
+
+
+def _wilcoxon_row(m1: str, m2: str, s1: np.ndarray, s2: np.ndarray) -> dict:
+    """Run a paired Wilcoxon signed-rank test and return a result dict."""
+    try:
+        stat, p_raw = wilcoxon(s1, s2, alternative="two-sided")
+        r = _rank_biserial_r(s1, s2)
+    except Exception as exc:
+        stat, p_raw, r = np.nan, 1.0, np.nan
+        print(f"  ⚠ Wilcoxon failed for {m1} vs {m2}: {exc}")
+    return {
+        "model_1": m1,
+        "model_2": m2,
+        "n_pairs": len(s1),
+        "W": stat,
+        "p_raw": p_raw,
+        "rank_biserial_r": round(r, 3) if not np.isnan(r) else np.nan,
+        "mean_1": round(float(np.mean(s1)), 2),
+        "sd_1": round(float(np.std(s1)), 2),
+        "median_1": round(float(np.median(s1)), 2),
+        "mean_2": round(float(np.mean(s2)), 2),
+        "sd_2": round(float(np.std(s2)), 2),
+        "median_2": round(float(np.median(s2)), 2),
+        "median_diff_1_minus_2": round(float(np.median(s1 - s2)), 2),
+    }
 
 
 def main():
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
     if not RESULTS_PATH.exists():
         raise FileNotFoundError(f"Results not found: {RESULTS_PATH}")
 
@@ -27,6 +94,7 @@ def main():
         cr = rec.get("crew_result", {})
         rows.append({
             "model": rec.get("llm"),
+            "query_id": rec.get("query_id"),
             "category": rec.get("category"),
             "bias_score": cr.get("bias_score"),
             "factual_accuracy": cr.get("factual_accuracy"),
@@ -37,50 +105,91 @@ def main():
     df = pd.DataFrame(rows)
     df.to_csv(OUTPUT_DIR / "results_flat.csv", index=False)
 
-    models = df["model"].dropna().unique().tolist()
-    if len(models) == 2:
+    models = sorted(df["model"].dropna().unique().tolist())
+
+    # ------------------------------------------------------------------
+    # Pivot to wide format so paired tests can align scores by query_id
+    # ------------------------------------------------------------------
+    wide = df.pivot_table(
+        index="query_id", columns="model", values="bias_score", aggfunc="first"
+    )
+    # Keep only queries where ALL models provided a score
+    wide = wide[models].dropna()
+    n_paired = len(wide)
+    n_total = df["query_id"].nunique()
+    print(f"Paired queries (all models scored): {n_paired} / {n_total}")
+
+    if n_paired < 2:
+        print("⚠ Fewer than 2 paired queries — skipping inferential tests.")
+    elif len(models) == 2:
+        # ---------------------------------------------------------------
+        # 2 models: Wilcoxon signed-rank (paired)
+        # ---------------------------------------------------------------
         m1, m2 = models
-        m1_scores = df[df["model"] == m1]["bias_score"].dropna().values
-        m2_scores = df[df["model"] == m2]["bias_score"].dropna().values
+        s1, s2 = wide[m1].values, wide[m2].values
+        row = _wilcoxon_row(m1, m2, s1, s2)
+        row["test"] = "Wilcoxon signed-rank (paired by query_id)"
+        pd.DataFrame([row]).to_csv(OUTPUT_DIR / "between_model_comparison.csv", index=False)
+        print(f"Wilcoxon W={row['W']}, p={row['p_raw']:.4f}, r={row['rank_biserial_r']}")
 
-        U, p = mannwhitneyu(m1_scores, m2_scores, alternative="two-sided")
-        n1, n2 = len(m1_scores), len(m2_scores)
-        r = 1 - (2 * U) / (n1 * n2) if n1 and n2 else np.nan
+    elif len(models) >= 3:
+        # ---------------------------------------------------------------
+        # 3+ models: Friedman omnibus (nonparametric repeated-measures)
+        # ---------------------------------------------------------------
+        groups = [wide[m].values for m in models]
+        chi2, p_friedman = friedmanchisquare(*groups)
+        k = len(models)
+        kendalls_W = chi2 / (n_paired * (k - 1))
 
-        summary = pd.DataFrame([
-            {
-                "model_1": m1,
-                "model_2": m2,
-                "U": U,
-                "p_value": p,
-                "rank_biserial_r": r,
-                "model_1_mean": np.mean(m1_scores) if n1 else np.nan,
-                "model_1_sd": np.std(m1_scores) if n1 else np.nan,
-                "model_2_mean": np.mean(m2_scores) if n2 else np.nan,
-                "model_2_sd": np.std(m2_scores) if n2 else np.nan,
-            }
-        ])
-        summary.to_csv(OUTPUT_DIR / "between_model_comparison.csv", index=False)
+        pd.DataFrame([{
+            "test": "Friedman (paired by query_id)",
+            "k_models": k,
+            "n_pairs": n_paired,
+            "chi2": round(chi2, 3),
+            "p_value": round(p_friedman, 4),
+            "kendalls_W": round(kendalls_W, 3),
+        }]).to_csv(OUTPUT_DIR / "friedman_omnibus.csv", index=False)
+        print(f"Friedman chi2={chi2:.3f}, p={p_friedman:.4f}, Kendall's W={kendalls_W:.3f}")
 
-    # Category-level stats
+        # Post-hoc pairwise Wilcoxon with Holm-Bonferroni
+        pairs = list(itertools.combinations(models, 2))
+        raw_rows = [
+            _wilcoxon_row(m1, m2, wide[m1].values, wide[m2].values)
+            for m1, m2 in pairs
+        ]
+        comp_df = pd.DataFrame(raw_rows)
+        comp_df["p_adjusted_holm"] = _holm_bonferroni(comp_df["p_raw"].fillna(1.0).values)
+        comp_df["significant_adj_p05"] = comp_df["p_adjusted_holm"] < 0.05
+        comp_df.to_csv(OUTPUT_DIR / "between_model_comparison.csv", index=False)
+        print(f"Post-hoc pairwise Wilcoxon saved ({len(comp_df)} pairs).")
+
+    # ------------------------------------------------------------------
+    # Category-level descriptive statistics
+    # ------------------------------------------------------------------
     cat_rows = []
     for cat in sorted(df["category"].dropna().unique()):
-        cat_df = df[df["category"] == cat]
         for model in models:
-            scores = cat_df[cat_df["model"] == model]["bias_score"].dropna().values
+            scores = df[(df["category"] == cat) & (df["model"] == model)]["bias_score"].dropna().values
             cat_rows.append({
                 "category": cat,
                 "model": model,
-                "mean": np.mean(scores) if len(scores) else np.nan,
-                "sd": np.std(scores) if len(scores) else np.nan,
                 "n": len(scores),
+                "mean": round(float(np.mean(scores)), 2) if len(scores) else np.nan,
+                "sd": round(float(np.std(scores)), 2) if len(scores) else np.nan,
+                "median": round(float(np.median(scores)), 2) if len(scores) else np.nan,
+                "min": round(float(np.min(scores)), 2) if len(scores) else np.nan,
+                "max": round(float(np.max(scores)), 2) if len(scores) else np.nan,
             })
     pd.DataFrame(cat_rows).to_csv(OUTPUT_DIR / "category_summary.csv", index=False)
 
-    # Correlation matrix
+    # ------------------------------------------------------------------
+    # Spearman correlation matrix across all four metrics
+    # ------------------------------------------------------------------
     metric_cols = ["bias_score", "factual_accuracy", "evidence_alignment", "risk_minimization"]
     corr = df[metric_cols].corr(method="spearman")
     corr.to_csv(OUTPUT_DIR / "metric_correlation_matrix.csv")
+
+    print(f"\nOutputs saved to {OUTPUT_DIR}/")
 
 
 if __name__ == "__main__":

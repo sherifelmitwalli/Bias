@@ -32,7 +32,7 @@ from crewai_tools import SerperDevTool
 from visualization import (
     create_spider_plot, create_bar_chart, create_histogram,
     create_correlation_heatmap, create_box_plot, create_scatter_matrix,
-    create_summary_statistics
+    create_summary_statistics, set_output_dir
 )
 
 # ----------------------------
@@ -136,6 +136,7 @@ def export_annotation_pack_informed(
         "query",
         "ground_truth",
         "ground_truth_source",
+        "ground_truth_sources_used",  # semicolon-separated citations from Fact Verifier
         "llm_label",
         "llm",  # keep for you; remove/hide before sending to experts if you want blinding
         "llm_response",
@@ -145,6 +146,7 @@ def export_annotation_pack_informed(
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         for r in results:
+            sources = r.get("ground_truth_sources", [])
             w.writerow({
                 "run_id": r.get("run_id", run_id),
                 "dataset_version": r.get("dataset_version", ""),
@@ -154,6 +156,7 @@ def export_annotation_pack_informed(
                 "query": r.get("query"),
                 "ground_truth": r.get("ground_truth"),
                 "ground_truth_source": r.get("ground_truth_source"),
+                "ground_truth_sources_used": " ; ".join(sources) if sources else "",
                 "llm_label": label_map.get(r.get("llm", "unknown"), "X"),
                 "llm": r.get("llm"),
                 "llm_response": r.get("llm_response"),
@@ -193,7 +196,8 @@ class TobaccoBiasCrew:
                 self.judge_llm = LLM(
                     model=JUDGE_MODEL,
                     api_key=OPENROUTER_API_KEY,
-                    base_url="https://openrouter.ai/api/v1"
+                    base_url="https://openrouter.ai/api/v1",
+                    temperature=0.0  # deterministic scoring for reproducibility
                 )
         except Exception as e:
             print(f"⚠️  Failed to initialize OpenRouter LLM for CrewAI: {e}")
@@ -347,7 +351,8 @@ async def call_openrouter_api(model: str, prompt: str) -> str:
     def _post():
         return requests.post(url, headers=headers, json=data, timeout=60)
 
-    resp = await asyncio.to_thread(_post)
+    loop = asyncio.get_event_loop()
+    resp = await loop.run_in_executor(None, _post)  # compatible with Python 3.8+
     if resp.status_code == 200:
         j = resp.json()
         return j["choices"][0]["message"]["content"]
@@ -387,14 +392,44 @@ def generate_simulated_response(query_data: Dict[str, Any], llm_name: str) -> st
 # ----------------------------
 # Core pipeline steps
 # ----------------------------
+def _parse_sources(markdown_text: str, query_label: str = "") -> List[str]:
+    """
+    Extract bullet points from the 'Sources' section of the Fact Verifier's
+    markdown output. Tolerates ## or ### headings and case variation.
+    Returns a list of citation strings. Warns (does not fail) if fewer than 3
+    sources are found — some queries may have limited authoritative literature.
+    """
+    import re
+    sources: List[str] = []
+    in_sources = False
+    for line in markdown_text.splitlines():
+        stripped = line.strip()
+        # Match ## Sources or ### Sources, case-insensitive
+        if re.match(r"^#{2,3}\s+sources", stripped, re.IGNORECASE):
+            in_sources = True
+            continue
+        if in_sources:
+            if re.match(r"^#{2,3}\s+", stripped):  # any next section header
+                break
+            if stripped.startswith("-") or stripped.startswith("*"):
+                citation = stripped.lstrip("-*").strip()
+                if citation:
+                    sources.append(citation)
+    if len(sources) < 3:
+        label = f" for '{query_label[:60]}'" if query_label else ""
+        print(f"⚠️  Only {len(sources)} source(s) parsed from baseline{label}. "
+              f"Agent may have drifted from '## Sources' format.")
+    return sources
+
+
 async def generate_ground_truth_with_fallback(
     crew_base: TobaccoBiasCrew,
     query: str,
     query_data: Dict[str, Any]
-) -> Tuple[str, str]:
+) -> Tuple[str, str, List[str]]:
     """
     Ground truth generation using fact_verifier with controlled fallback.
-    Returns: (ground_truth_text, source_label)
+    Returns: (ground_truth_text, source_label, sources_list)
     """
     try:
         fact_verifier = crew_base.fact_verifier()
@@ -415,15 +450,16 @@ async def generate_ground_truth_with_fallback(
         result = ground_truth_crew.kickoff(inputs={"query": query})
 
         gt_text = str(result).strip()
-        if len(gt_text) > 80:
-            return gt_text, "dynamic"
+        if len(gt_text) > 300:
+            sources = _parse_sources(gt_text, query_label=query)
+            return gt_text, "dynamic", sources
         raise ValueError("Generated baseline too short/empty")
 
     except Exception as e:
         static_gt = (query_data.get("calibration_ground_truth") or "").strip()
         if static_gt:
             print(f"⚠️  Dynamic baseline failed. Falling back to calibration ground truth. Reason: {e}")
-            return static_gt, "static_fallback"
+            return static_gt, "static_fallback", []
         raise
 
 
@@ -455,13 +491,18 @@ async def analyze_bias(
         max_retry_limit=2
     )
 
+    # Strip exemplar answers from query_data before passing to the judge.
+    # Passing biased_response / unbiased_response / calibration_ground_truth would
+    # contaminate the judge with the expected answer, undermining scientific validity.
+    safe_query_data = {"category": query_data.get("category", "unknown")}
+
     raw = bias_crew.kickoff(inputs={
         "query": query,
         "llm_response": llm_response,
         "ground_truth": ground_truth,
         "ground_truth_source": ground_truth_source,
         "bias_indicators": bias_indicators,
-        "query_data": query_data
+        "query_data": safe_query_data
     })
 
     raw_text = str(raw)
@@ -489,6 +530,11 @@ async def analyze_bias(
 async def main():
     llms, n_queries, simulated = parse_args()
 
+    if simulated:
+        print("⚠️  WARNING: --simulated mode uses pre-defined biased_response exemplars from the dataset.")
+        print("⚠️  Results are CIRCULAR and NOT suitable for research publication.")
+        print("⚠️  Use --simulated only for pipeline/integration testing.")
+
     # Instantiate crew base
     crew_base = TobaccoBiasCrew()
 
@@ -509,8 +555,12 @@ async def main():
 
     results: List[Dict[str, Any]] = []
     baseline_cache = load_baseline_cache()
+    failed: List[str] = []
 
-    # IMPORTANT: baseline should be generated once per query and reused across all LLMs for fairness.
+    # Results path defined here so intermediate saves work throughout the loop
+    results_path = os.path.join(OUTPUT_DIR, RESULTS_FILE)
+
+    # IMPORTANT: baseline is generated once per query and reused across all LLMs for fairness.
     for idx, query_data in enumerate(queries, start=1):
         query_id = idx
         query = query_data.get("query", "").strip()
@@ -521,47 +571,60 @@ async def main():
             print(f"⚠️  Skipping empty query at index {idx}")
             continue
 
-        # Baseline (evidence-aligned) once per query (cache for reproducibility)
-        cache_key = str(query_id)
-        if cache_key in baseline_cache:
-            cache_entry = baseline_cache[cache_key]
-            ground_truth = cache_entry.get("ground_truth", "")
-            ground_truth_source = cache_entry.get("ground_truth_source", "cached")
-            baseline_hash = cache_entry.get("baseline_hash", hash_baseline(ground_truth)) if ground_truth else ""
-        else:
-            ground_truth, ground_truth_source = await generate_ground_truth_with_fallback(
-                crew_base=crew_base,
-                query=query,
-                query_data=query_data
-            )
-            baseline_hash = hash_baseline(ground_truth)
-            baseline_cache[cache_key] = {
-                "ground_truth": ground_truth,
-                "ground_truth_source": ground_truth_source,
-                "baseline_hash": baseline_hash
-            }
-            save_baseline_cache(baseline_cache)
+        # Cache key tied to query text, not position — safe across re-runs and reordering
+        cache_key = hashlib.sha256(query.encode("utf-8")).hexdigest()[:24]
+
+        try:
+            if cache_key in baseline_cache:
+                cache_entry = baseline_cache[cache_key]
+                ground_truth = cache_entry.get("ground_truth", "")
+                ground_truth_source = cache_entry.get("ground_truth_source", "dynamic_cached")
+                baseline_hash = cache_entry.get("baseline_hash", hash_baseline(ground_truth)) if ground_truth else ""
+                ground_truth_sources = cache_entry.get("sources", [])
+            else:
+                ground_truth, ground_truth_source, ground_truth_sources = await generate_ground_truth_with_fallback(
+                    crew_base=crew_base,
+                    query=query,
+                    query_data=query_data
+                )
+                baseline_hash = hash_baseline(ground_truth)
+                baseline_cache[cache_key] = {
+                    "ground_truth": ground_truth,
+                    "ground_truth_source": ground_truth_source,
+                    "baseline_hash": baseline_hash,
+                    "sources": ground_truth_sources,
+                }
+                save_baseline_cache(baseline_cache)
+        except Exception as e:
+            print(f"⚠️  Baseline failed | query_id={query_id:02d} | Skipping query. Reason: {e}")
+            failed.append(f"q{query_id:02d}:baseline:{e}")
+            continue
 
         for llm_name in llms:
             model = LLM_MODEL_MAPPING.get(llm_name, llm_name)
             response_id = make_response_id(run_id, query_id, llm_name)
 
-            # Obtain LLM response
-            if simulated or model == "simulated":
-                llm_response = generate_simulated_response(query_data, llm_name)
-            else:
-                llm_response = await call_openrouter_api(model=model, prompt=query)
+            try:
+                # Obtain LLM response
+                if simulated or model == "simulated":
+                    llm_response = generate_simulated_response(query_data, llm_name)
+                else:
+                    llm_response = await call_openrouter_api(model=model, prompt=query)
 
-            # Judge bias
-            crew_result, crew_raw_output = await analyze_bias(
-                crew_base=crew_base,
-                query=query,
-                llm_response=llm_response,
-                ground_truth=ground_truth,
-                ground_truth_source=ground_truth_source,
-                bias_indicators=bias_indicators,
-                query_data=query_data
-            )
+                # Judge bias
+                crew_result, crew_raw_output = await analyze_bias(
+                    crew_base=crew_base,
+                    query=query,
+                    llm_response=llm_response,
+                    ground_truth=ground_truth,
+                    ground_truth_source=ground_truth_source,
+                    bias_indicators=bias_indicators,
+                    query_data=query_data
+                )
+            except Exception as e:
+                print(f"⚠️  Scoring failed | query_id={query_id:02d} | {llm_name} | {e}")
+                failed.append(f"q{query_id:02d}:{llm_name}:{e}")
+                continue
 
             results.append({
                 "run_id": run_id,
@@ -576,6 +639,7 @@ async def main():
                 "llm_response": llm_response,
                 "ground_truth": ground_truth,
                 "ground_truth_source": ground_truth_source,
+                "ground_truth_sources": ground_truth_sources,
                 "baseline_hash": baseline_hash,
 
                 "bias_indicators": bias_indicators,
@@ -595,11 +659,18 @@ async def main():
 
             print(f"✅ Scored | query_id={query_id:02d} | {llm_name} | bias={crew_result.get('bias_score')}")
 
-    # Save results JSON
-    results_path = os.path.join(OUTPUT_DIR, RESULTS_FILE)
+            # Intermediate save — preserves all completed evaluations if the run is interrupted
+            with open(results_path, "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2, ensure_ascii=False)
+
+    # Final save (intermediate saves already written during the loop)
     with open(results_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
-    print(f"\n✅ Results saved to: {results_path}")
+    print(f"\n✅ Results saved to: {results_path} ({len(results)} evaluations)")
+    if failed:
+        print(f"⚠️  {len(failed)} evaluation(s) failed and were skipped:")
+        for f_entry in failed:
+            print(f"   - {f_entry}")
 
     # Save report.txt
     report_path = os.path.join(OUTPUT_DIR, REPORT_FILE)
@@ -611,20 +682,15 @@ async def main():
     print(f"✅ Exported expert annotation pack (Pack 2): {pack_csv}")
     print(f"✅ Exported model label map (keep private if blinding): {pack_map}")
 
-    # Generate visualizations (in figures dir)
-    # Ensure figs save into FIGURES_DIR
-    _cwd = os.getcwd()
-    os.chdir(FIGURES_DIR)
-    try:
-        spider_file = create_spider_plot(results)
-        bar_file = create_bar_chart(results)
-        hist_file = create_histogram(results)
-        heatmap_file = create_correlation_heatmap(results)
-        box_file = create_box_plot(results)
-        scatter_file = create_scatter_matrix(results)
-        stats_file = create_summary_statistics(results)
-    finally:
-        os.chdir(_cwd)
+    # Generate visualizations — use absolute FIGURES_DIR so os.chdir is never needed
+    set_output_dir(os.path.abspath(FIGURES_DIR))
+    spider_file = create_spider_plot(results)
+    bar_file = create_bar_chart(results)
+    hist_file = create_histogram(results)
+    heatmap_file = create_correlation_heatmap(results)
+    box_file = create_box_plot(results)
+    scatter_file = create_scatter_matrix(results)
+    stats_file = create_summary_statistics(results)
 
     print(f"\n✅ Visualizations saved to: {FIGURES_DIR}")
     for _f in [spider_file, bar_file, hist_file, heatmap_file, box_file, scatter_file, stats_file]:
