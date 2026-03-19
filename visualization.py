@@ -231,9 +231,9 @@ def create_scatter_matrix(results: List[Dict[str, Any]]) -> str:
     return _savefig("bias_scatter_matrix")
 
 
-def create_summary_statistics(results: List[Dict[str, Any]]) -> str:
+def create_summary_statistics(results: List[Dict[str, Any]]):
     if not results:
-        return ""
+        return "", ""
 
     df = _metrics_df(results)
     metric_cols = ["Bias Score", "Factual Accuracy", "Risk Minimization", "Evidence Alignment"]
@@ -272,6 +272,6 @@ def create_summary_statistics(results: List[Dict[str, Any]]) -> str:
     tbl.set_fontsize(8)
     tbl.scale(1.0, 1.2)
     plt.title("Table 1: Summary statistics by model", pad=12)
-    _savefig("table1_summary_statistics")
+    fig_path = _savefig("table1_summary_statistics")
 
-    return table_path
+    return table_path, fig_path

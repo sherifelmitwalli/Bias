@@ -13,7 +13,6 @@ from scipy.stats import spearmanr
 from sklearn.metrics import cohen_kappa_score
 
 OUTPUT_DIR = Path("expert_validation_outputs")
-OUTPUT_DIR.mkdir(exist_ok=True)
 
 THRESHOLDS = {
     "icc_good": 0.75,
@@ -206,6 +205,7 @@ def _find_annotation_pack() -> Path:
 
 
 def main():
+    OUTPUT_DIR.mkdir(exist_ok=True)
     annotation_pack = _find_annotation_pack()
     e1_path = Path("outputs/annotations/expert_1_annotations.csv")
     e2_path = Path("outputs/annotations/expert_2_annotations.csv")

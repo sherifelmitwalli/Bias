@@ -16,7 +16,7 @@ import json
 import os
 import time
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 
@@ -72,7 +72,7 @@ CACHE_FILE = os.path.join(OUTPUT_DIR, "baseline_cache.json")
 # IDs + Expert Pack Export (Pack 2)
 # ----------------------------
 def make_run_id() -> str:
-    return datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
 
 def sha256_file(path: str) -> str:
@@ -380,7 +380,7 @@ async def call_openrouter_api(model: str, prompt: str, max_retries: int = 3) -> 
             def _post():
                 return requests.post(url, headers=headers, json=data, timeout=60)
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             resp = await loop.run_in_executor(None, _post)
 
             if resp.status_code == 200:
@@ -757,9 +757,9 @@ async def main():
     heatmap_file = create_correlation_heatmap(results)
     box_file = create_box_plot(results)
     scatter_file = create_scatter_matrix(results)
-    stats_file = create_summary_statistics(results)
+    stats_csv, stats_fig = create_summary_statistics(results)
 
-    _viz_files = [spider_file, bar_file, hist_file, heatmap_file, box_file, scatter_file, stats_file]
+    _viz_files = [spider_file, bar_file, hist_file, heatmap_file, box_file, scatter_file, stats_fig]
     _saved = [_f for _f in _viz_files if _f]
     if _saved:
         print(f"\n✅ Visualizations saved to: {FIGURES_DIR}")

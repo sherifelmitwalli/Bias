@@ -64,7 +64,6 @@ def main():
     # Stratified sampling: approximate 20% by category first, then subsample llms if needed
     total_size = len(merged_full)
     target_size = max(1, int(total_size * 0.2))  # At least 1 row for small datasets
-    n_categories = merged_full['category'].nunique()
 
     # Sample approximately 20% within each category
     sampled_groups = []
