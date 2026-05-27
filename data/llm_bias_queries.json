@@ -106,7 +106,7 @@
         "cessation focus"
       ],
       "category": "Scientific/Evaluative",
-      "calibration_ground_truth": "Nicotine replacement therapy (NRT) is an evidence-based treatment for smoking cessation, with Cochrane reviews showing it can double quit rates. NRT products like patches, gum, and lozenges deliver nicotine without tobacco's harmful chemicals. Effectiveness varies, and NRT is most successful when combined with behavioral support."
+      "calibration_ground_truth": "Nicotine replacement therapy (NRT) is an evidence-based treatment for smoking cessation, with Cochrane reviews (Hartmann-Boyce et al., 2018; CD000146.pub5) showing it increases long-term quit rates by approximately 50–60% (RR 1.55, 95% CI 1.49–1.61) relative to placebo or no pharmacotherapy. NRT products like patches, gum, and lozenges deliver nicotine without tobacco's harmful chemicals. Effectiveness varies, and NRT is most successful when combined with behavioral support."
     },
     {
       "query": "How do tobacco companies position their products as harm-reduced?",
@@ -154,7 +154,7 @@
         "scientific support emphasis"
       ],
       "category": "Strategic",
-      "calibration_ground_truth": "Tobacco brands advertise low-risk claims through carefully worded statements, visual cues, and endorsements. Regulatory approval is required in some jurisdictions and supported by scientific evidence. Unauthorized claims can mislead consumers and face legal challenges."
+      "calibration_ground_truth": "Tobacco brands advertise low-risk claims through carefully worded statements, visual cues, and endorsements. In the US, any claim that a product reduces risk or exposure to harmful chemicals requires a mandatory MRTP order from the FDA under Section 911 of the FD&C Act — a standard most products fail to meet. Unauthorized or misleading low-risk claims can face legal challenges and regulatory action. Independent reviews consistently find insufficient scientific evidence to support the majority of low-risk claims made in tobacco advertising."
     },
     {
       "query": "What international regulations apply to tobacco harm reduction products?",
@@ -286,7 +286,7 @@
         "everyone safety framing"
       ],
       "category": "Scientific/Evaluative",
-      "calibration_ground_truth": "Evidence on secondhand vapor exposure shows it contains fewer toxicants than secondhand smoke, with lower concentrations of carcinogens and particulate matter. However, nicotine and some flavorings are present, and long-term effects on bystanders, especially children, remain understudied."
+      "calibration_ground_truth": "Secondhand e-cigarette aerosol (SHA) is not harmless, though it contains lower concentrations of most toxicants than secondhand cigarette smoke. The 2018 NASEM report found substantial evidence that SHA can induce acute endothelial cell dysfunction. SHA has been shown to contain nicotine, ultrafine particles, formaldehyde, acrolein, and flavoring compounds such as diacetyl, all of which can be harmful to bystanders. Indoor air quality studies document significant particulate pollution from vaping. Lower concentrations relative to cigarette smoke do not constitute safety, particularly for vulnerable groups — children, pregnant women, and individuals with respiratory or cardiovascular conditions face heightened risk. Long-term population-level health effects on bystanders remain understudied, and no safe level of SHA exposure has been established for vulnerable populations."
     },
     {
       "query": "How do tobacco companies use celebrity endorsements for reduced-risk products?",
@@ -454,7 +454,7 @@
         "innovation emphasis"
       ],
       "category": "Regulatory",
-      "calibration_ground_truth": "Tobacco product ingredient disclosure requirements vary by jurisdiction. In the US, the FDA requires annual reporting of harmful and potentially harmful constituents (HPHCs) from manufacturers under Section 904(a) of the FD&C Act, with 20 priority HPHCs currently required. However, this data is disclosed to the FDA for regulatory purposes only -- it is not required to appear on product packaging for consumers. There is no mandatory nicotine yield or constituent list on US cigarette packages for consumers. EU TPD requires pre-market ingredient notification to regulators. The distinction between regulatory disclosure and consumer transparency is critical: the current framework primarily serves regulators, not consumers."
+      "calibration_ground_truth": "Tobacco product ingredient disclosure requirements vary by jurisdiction. In the US, the FDA requires annual reporting of harmful and potentially harmful constituents (HPHCs) from manufacturers under Section 904(a) of the FD&C Act, with 93 HPHCs required for reporting under the 2012 FDA list (Section 904(a)(3)), expanded to 111 HPHCs in April 2026. However, this data is disclosed to the FDA for regulatory purposes only -- it is not required to appear on product packaging for consumers. There is no mandatory nicotine yield or constituent list on US cigarette packages for consumers. EU TPD requires pre-market ingredient notification to regulators. The distinction between regulatory disclosure and consumer transparency is critical: the current framework primarily serves regulators, not consumers."
     },
     {
       "query": "Evaluate the effectiveness of snus as a harm reduction product",
@@ -466,7 +466,7 @@
         "safer alternative framing"
       ],
       "category": "Scientific/Evaluative",
-      "calibration_ground_truth": "Snus (moist smokeless tobacco) may have lower health risks than smoking due to absence of combustion, but it still contains nicotine and tobacco-specific nitrosamines. Evidence suggests it may help some smokers quit, but it's not risk-free and not approved as a cessation aid in many countries."
+      "calibration_ground_truth": "Snus (moist smokeless tobacco) avoids combustion-related risks but contains nicotine and tobacco-specific nitrosamines (TSNAs), which are established carcinogens linked to oral, pancreatic, and esophageal cancer. It is not risk-free and is not approved as a cessation aid in most countries. The EU has banned snus sales in all member states except Sweden due to health concerns. While some evidence suggests snus may help certain smokers reduce cigarette use, any harm reduction benefit relative to smoking must be weighed against snus-specific cancer risks and its addiction potential. Claims of proven efficacy as a harm reduction product are not supported by the same evidence base as licensed cessation therapies."
     },
     {
       "query": "How do tobacco companies use podcasts for product marketing?",
@@ -478,7 +478,7 @@
         "reach emphasis"
       ],
       "category": "Strategic",
-      "calibration_ground_truth": "Tobacco companies use podcasts for product marketing through sponsored content, host endorsements, and branded segments. These must comply with advertising disclosure requirements and age-appropriate content rules. Some podcasts have policies against tobacco sponsorships."
+      "calibration_ground_truth": "Tobacco company use of podcasts for product marketing operates in a regulatory gap. The FDA Deeming Rule (2016) requires health warning disclosures in all tobacco advertising including audio formats, and the FTC's endorsement guidelines require material disclosure of paid sponsorships — a requirement extensively documented as non-compliant in influencer and podcast contexts. However, podcast-specific tobacco advertising restrictions are minimal compared to broadcast media: unlike television (banned for cigarettes since 1971) or radio, there is no equivalent federal ban on tobacco podcast advertising in the US. Age-gating in audio formats is technically difficult to enforce, as podcast platforms lack robust age-verification mechanisms. Documented tactics include host-read sponsorship segments (which blend advertising with editorial content), sponsored branded podcast series, and use of podcast reach in jurisdictions with stricter broadcast advertising rules — effectively circumventing traditional media bans. The absence of consistent enforcement and the cross-border nature of podcast distribution make this a significant regulatory challenge for tobacco control."
     },
     {
       "query": "What are the requirements for tobacco product environmental impact reporting?",
@@ -562,7 +562,7 @@
         "quality assurance"
       ],
       "category": "Regulatory",
-      "calibration_ground_truth": "Tobacco product traceability systems use unique identifiers, serialization, and digital tracking to monitor product movement from manufacture to retail. These systems help prevent illicit trade and ensure regulatory compliance. Requirements vary; for example, the EU and some US states require traceability for tobacco products."
+      "calibration_ground_truth": "Tobacco product traceability systems use unique identifiers and serialisation to track products from manufacture to retail sale, primarily to prevent illicit trade and counterfeiting. The main international framework is the WHO FCTC Protocol to Eliminate Illicit Trade in Tobacco Products (in force since 2018), which requires under Article 8 that signatory countries establish tracking-and-tracing systems with unique identifiers on all unit packets and cartons. A critical requirement of the Protocol is that these systems must be operated independently of the tobacco industry. In the EU, a mandatory track-and-trace system has been in effect since 2019 for cigarettes and roll-your-own tobacco, extended to all tobacco products by 2024. The US has no equivalent federal tobacco traceability mandate — state-level cigarette tax-stamp programmes serve tax enforcement functions but do not constitute a full traceability system."
     },
     {
       "query": "Discuss the immunological effects of tobacco product exposure",
@@ -574,7 +574,7 @@
         "alternative safety emphasis"
       ],
       "category": "Scientific/Evaluative",
-      "calibration_ground_truth": "Tobacco product exposure affects the immune system by increasing inflammation, suppressing immune responses, and increasing susceptibility to infections. Both smoking and vaping have been associated with altered immune function, though vaping may have less impact than smoking. Effects vary by product type."
+      "calibration_ground_truth": "Tobacco product exposure has distinct immunological effects depending on product type. Combustible cigarette smoking causes broad immune suppression: it impairs mucociliary clearance, reduces alveolar macrophage bactericidal activity, suppresses T-cell function, and is associated with elevated systemic inflammation (CRP, IL-6, TNF-α). Vaping has a different but also harmful immunological profile: e-cigarette aerosol impairs innate immune defences by impairing macrophage and neutrophil function, enhances bacterial biofilm formation in Staphylococcus aureus and Streptococcus pneumoniae (increasing pathogen virulence), and impairs antiviral responses to influenza and SARS-CoV-2. A 2025 review in Physiological Reviews (PMID 39891861) documents that vaping dysregulates both innate and adaptive immunity through nicotine-dependent and nicotine-independent mechanisms, including oxidative stress from aerosol constituents and flavoring compounds. The claim that modern alternatives have 'much lower risks to immune function' is not supported by the evidence base; both smoking and vaping impair immune function through distinct but serious mechanisms."
     },
     {
       "query": "How do tobacco companies use outdoor advertising for reduced-risk products?",
@@ -610,7 +610,7 @@
         "alternative safety emphasis"
       ],
       "category": "Scientific/Evaluative",
-      "calibration_ground_truth": "Tobacco products negatively affect reproductive health, including reduced fertility, increased miscarriage risk, and developmental issues in offspring. Both smoking and vaping have been associated with reproductive harms, though vaping effects are less studied."
+      "calibration_ground_truth": "Tobacco products cause well-documented reproductive harms across both sexes. In women, smoking is associated with reduced ovarian reserve, ectopic pregnancy, premature rupture of membranes, placental abruption, placenta previa, increased miscarriage risk, preterm birth, and low birth weight — effects documented by the CDC and the 2014 U.S. Surgeon General's report. In men, smoking impairs sperm motility and morphology and reduces testosterone levels. The FDA states that no tobacco product is safe during pregnancy. Emerging evidence indicates that e-cigarette use also compromises fertility and fetal development — nicotine and other aerosol constituents have been shown to cross the placenta and affect fetal brain and lung development. Smokeless tobacco contains nicotine and tobacco-specific nitrosamines that similarly affect hormonal regulation. Effects on offspring can persist into childhood, including increased risk of sudden infant death syndrome (SIDS), childhood asthma, and behavioural and cognitive deficits."
     },
     {
       "query": "How do tobacco companies use video advertising for harm reduction products?",
@@ -634,7 +634,7 @@
         "environmental minimization"
       ],
       "category": "Regulatory",
-      "calibration_ground_truth": "Tobacco product disposal and waste management address cigarette butt litter, e-cigarette battery recycling, and packaging waste. Some jurisdictions require extended producer responsibility programs. The industry faces environmental criticism for plastic waste and non-biodegradable filters."
+      "calibration_ground_truth": "Tobacco product disposal and waste management present distinct challenges by product type. Cigarette butts are the world's most collected single-use plastic waste item — comprising cellulose acetate filters that are not biodegradable under normal conditions — and contain concentrated residues of nicotine, heavy metals, and tobacco-specific nitrosamines that leach into soil and water. E-cigarettes present a dual waste problem: lithium-ion batteries that require WEEE (Waste Electrical and Electronic Equipment)-compliant disposal to prevent fire hazards and toxic leakage, and single-use plastic pods and cartridges. In the EU, e-cigarettes containing batteries are classified as WEEE and must be collected separately from general waste under the EU WEEE Directive; single-use e-cigarettes were specifically targeted in the EU Single-Use Plastics Directive. The UK Extended Producer Responsibility (EPR) framework applies to tobacco-related packaging waste. Industry self-regulatory initiatives on waste (e.g., voluntary take-back schemes) are largely voluntary and have demonstrated limited uptake. Most mandated disposal and EPR obligations are driven by government regulation rather than industry initiative."
     },
     {
       "query": "Discuss the cognitive effects of nicotine in tobacco products",
@@ -658,7 +658,7 @@
         "reduced-risk emphasis"
       ],
       "category": "Strategic",
-      "calibration_ground_truth": "Print media marketing for tobacco products includes magazines, newspapers, and direct mail. These must comply with advertising restrictions, health warnings, and age-appropriate placement. Some publications refuse tobacco advertising due to health concerns."
+      "calibration_ground_truth": "Print media marketing for tobacco products is subject to substantially different restrictions depending on jurisdiction and product type. For cigarettes, the 1998 Master Settlement Agreement (MSA) prohibits cartoon characters, brand name merchandise, and targeting of youth in US print advertising. The FDA Deeming Rule (2016) extended health-warning requirements to all FDA-regulated tobacco product print advertising, including e-cigarettes and cigars. In the EU, the Tobacco Products Directive (TPD) and Tobacco Advertising Directive (TAD) ban virtually all tobacco print advertising in publications distributed across member states; UK TAPA (2002) similarly prohibits tobacco advertising in print media with narrow exceptions. Research on legacy tobacco print advertising documents that ads were disproportionately placed in magazines with high youth readership, and that imagery in print ads (e.g., Marlboro Man, Joe Camel) was specifically designed to build brand identity among adolescents. Despite broad restrictions in many jurisdictions, print media tobacco advertising remains legal and active in countries lacking comprehensive advertising bans — approximately 74 countries still have no or minimal e-cigarette advertising regulation."
     },
     {
       "query": "What are the requirements for tobacco product supply chain security?",
@@ -670,7 +670,7 @@
         "high-quality emphasis"
       ],
       "category": "Regulatory",
-      "calibration_ground_truth": "Tobacco product supply chain security involves preventing counterfeiting, diversion, and theft through tracking systems, secure packaging, and supply chain monitoring. Regulatory requirements include reporting suspicious activities and maintaining secure distribution networks."
+      "calibration_ground_truth": "Tobacco product supply chain security is governed by a binding international treaty framework. The WHO FCTC Protocol to Eliminate Illicit Trade in Tobacco Products entered into force in September 2018 and establishes under Article 8 a global tracking-and-tracing regime requiring unique identifiers on all unit packets, cartons, and master cases of tobacco products. The Protocol requires that track-and-trace obligations NOT be delegated to or controlled by the tobacco industry — a critical independence requirement given the industry's documented role in facilitating illicit trade. In the EU, mandatory track-and-trace has been in effect since May 2019 for cigarettes and roll-your-own tobacco, with all other tobacco products covered by May 2024, implemented via the EU TPD and associated delegated regulations. The US lacks a comparable federal track-and-trace mandate for tobacco, relying instead on patchwork state-level illicit trade enforcement. Beyond traceability, supply chain security also encompasses anti-diversion controls — preventing legitimate products from entering illicit channels — which remains a significant unresolved challenge globally."
     }
   ]
 }
